@@ -3,3 +3,4 @@ set(COMPONENTS "main esptool_py")
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(mittarimato)
+
