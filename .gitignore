@@ -1,0 +1,4 @@
+*.swp
+sdkconfig
+build/
+*.code-workspace
