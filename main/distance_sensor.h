@@ -1,11 +1,14 @@
 #pragma once
 
+#include <memory>
+
 class DistanceSensor {
  public:
-  DistanceSensor();
+  virtual ~DistanceSensor() = default;
 
-  void Start();
-  void Stop();
+  virtual void Start() = 0;
+  virtual void Stop() = 0;
+  virtual int GetDistanceMM() = 0;
 
-  int GetDistanceCM();
+  static std::unique_ptr<DistanceSensor> Create();
 };
