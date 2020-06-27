@@ -1,6 +1,8 @@
 idf_component_register(
   SRCS
-    "main.cc"
-    "i2c.cc"
+    "display.cc"
     "distance_sensor.cc"
+    "i2c.cc"
+    "main.cc"
+    "spi.cc"
   INCLUDE_DIRS "")

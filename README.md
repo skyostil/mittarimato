@@ -6,7 +6,8 @@ A simple little real-time distance display for ESP8266.
 
 - Distance sensor: STMicroelectronics VL53L1X
   - Connected to I2C address 0x29.
-- Display: Waveshare 0.95inch RGB OLED
+- Display: Waveshare 0.95inch RGB OLED (SSD1331)
+  - Connected over SPI.
 - I2C configuration:
   - Port 0
   - SDA pin: GPIO #4
