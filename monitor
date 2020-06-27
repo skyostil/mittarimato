@@ -1,2 +1,3 @@
 #!/bin/sh
-exec picocom -b 74880 /dev/ttyUSB0 $@
+#exec picocom -b 74880 /dev/ttyUSB0 $@
+exec $IDF_PATH/tools/idf.py monitor

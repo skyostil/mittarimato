@@ -10,7 +10,18 @@ class VL53L1X : public DistanceSensor {
   VL53L1X() = default;
   ~VL53L1X() override = default;
 
-  void Start() override {}
+  void Start() override {
+    auto model = ReadReg16(VL53L1_IDENTIFICATION__MODEL_ID);
+    if (model != 0xeacc) {
+      printf("Unexpected VL53L1X model: %x", model);
+      abort();
+    }
+
+    // Software reset.
+    WriteReg8(VL53L1_SOFT_RESET, 0x00);
+    os_delay_us(100);
+    WriteReg8(VL53L1_SOFT_RESET, 0x01);
+  }
 
   void Stop() override {}
 
