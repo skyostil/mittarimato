@@ -5,6 +5,16 @@
 
 class VL53L1X : public DistanceSensor {
   constexpr static uint8_t kI2CAddress = 0x29;
+  constexpr static uint16_t kTargetRate = 0x0A00;
+
+  // vhv = LOWPOWER_AUTO_VHV_LOOP_DURATION_US + LOWPOWERAUTO_VHV_LOOP_BOUND
+  //       (tuning parm default) * LOWPOWER_AUTO_VHV_LOOP_DURATION_US
+  //     = 245 + 3 * 245 = 980
+  // TimingGuard = LOWPOWER_AUTO_OVERHEAD_BEFORE_A_RANGING +
+  //               LOWPOWER_AUTO_OVERHEAD_BETWEEN_A_B_RANGING + vhv
+  //             = 1448 + 2100 + 980 = 4528
+  constexpr static uint32_t kMinMeasurementBudgetUs = 4528;
+  constexpr static uint32_t kMaxMeasurementBudgetUs = 1100000;
 
  public:
   VL53L1X() = default;
@@ -13,17 +23,184 @@ class VL53L1X : public DistanceSensor {
   void Start() override {
     auto model = ReadReg16(VL53L1_IDENTIFICATION__MODEL_ID);
     if (model != 0xeacc) {
-      printf("Unexpected VL53L1X model: %x", model);
+      printf("VL53L1X: Unexpected model: %x\n", model);
       abort();
     }
 
-    // Software reset.
+    // Do a software reset.
     WriteReg8(VL53L1_SOFT_RESET, 0x00);
     os_delay_us(100);
     WriteReg8(VL53L1_SOFT_RESET, 0x01);
+
+    constexpr int kTimeout = 100;
+    for (int i = 0; i < kTimeout; i++) {
+      if (ReadReg8(VL53L1_FIRMWARE__SYSTEM_STATUS) & 0x01)
+        break;
+      if (i == kTimeout) {
+        printf("VL53L1X: Boot timeout\n");
+        abort();
+      }
+      os_delay_us(100);
+    }
+
+    // Switch to 2V8 mode.
+    WriteReg8(VL53L1_PAD_I2C_HV__EXTSUP_CONFIG,
+              ReadReg8(VL53L1_PAD_I2C_HV__EXTSUP_CONFIG) | 0x01);
+
+    fast_osc_frequency_ = ReadReg16(VL53L1_OSC_MEASURED__FAST_OSC__FREQUENCY);
+    auto osc_calibrate_val = ReadReg16(VL53L1_RESULT__OSC_CALIBRATE_VAL);
+
+    printf("osc: %d, cal: %d\n", fast_osc_frequency_, osc_calibrate_val);
+
+    // Static config (applied at the beginning of a measurement).
+    WriteReg16(VL53L1_DSS_CONFIG__TARGET_TOTAL_RATE_MCPS, kTargetRate);
+    WriteReg8(VL53L1_GPIO__TIO_HV_STATUS, 0x02);
+    WriteReg8(VL53L1_SIGMA_ESTIMATOR__EFFECTIVE_PULSE_WIDTH_NS,
+              8);  // Tuning parm default.
+    WriteReg8(VL53L1_SIGMA_ESTIMATOR__EFFECTIVE_AMBIENT_WIDTH_NS,
+              16);  // Tuning parm default.
+    WriteReg8(VL53L1_ALGO__CROSSTALK_COMPENSATION_VALID_HEIGHT_MM, 0x01);
+    WriteReg8(VL53L1_ALGO__RANGE_IGNORE_VALID_HEIGHT_MM, 0xFF);
+    WriteReg8(VL53L1_ALGO__RANGE_MIN_CLIP, 0);  // Tuning parm default.
+    WriteReg8(VL53L1_ALGO__CONSISTENCY_CHECK__TOLERANCE,
+              2);  // Tuning parm default.
+
+    // General config.
+    WriteReg16(VL53L1_SYSTEM__THRESH_RATE_HIGH, 0x0000);
+    WriteReg16(VL53L1_SYSTEM__THRESH_RATE_LOW, 0x0000);
+    WriteReg8(VL53L1_DSS_CONFIG__APERTURE_ATTENUATION, 0x38);
+
+    // Timing config.
+    WriteReg16(VL53L1_RANGE_CONFIG__SIGMA_THRESH, 360);  // tuning parm default
+    WriteReg16(VL53L1_RANGE_CONFIG__MIN_COUNT_RATE_RTN_LIMIT_MCPS,
+               192);  // tuning parm default
+
+    // Dynamic config.
+    WriteReg8(VL53L1_SYSTEM__GROUPED_PARAMETER_HOLD_0, 0x01);
+    WriteReg8(VL53L1_SYSTEM__GROUPED_PARAMETER_HOLD_1, 0x01);
+    WriteReg8(VL53L1_SD_CONFIG__QUANTIFIER, 2);  // tuning parm default
+
+    WriteReg8(VL53L1_SYSTEM__GROUPED_PARAMETER_HOLD, 0x00);
+    WriteReg8(VL53L1_SYSTEM__SEED_CONFIG, 1);  // tuning parm default
+
+    // from VL53L1_config_low_power_auto_mode
+    WriteReg8(VL53L1_SYSTEM__SEQUENCE_CONFIG,
+              0x8B);  // VHV, PHASECAL, DSS1, RANGE
+    WriteReg16(VL53L1_DSS_CONFIG__MANUAL_EFFECTIVE_SPADS_SELECT, 200 << 8);
+    WriteReg8(VL53L1_DSS_CONFIG__ROI_MODE_CONTROL,
+              2);  // REQUESTED_EFFFECTIVE_SPADS
+
+    SetRange(Range::kLong);
+    SetMeasurementTimingBudget(50000);
+
+    WriteReg16(VL53L1_ALGO__PART_TO_PART_RANGE_OFFSET_MM,
+               ReadReg16(VL53L1_MM_CONFIG__OUTER_OFFSET_MM) * 4);
   }
 
   void Stop() override {}
+
+  void SetRange(Range range) override {
+    switch (range) {
+      case Range::kShort:
+        // Timing config.
+        WriteReg8(VL53L1_RANGE_CONFIG__VCSEL_PERIOD_A, 0x07);
+        WriteReg8(VL53L1_RANGE_CONFIG__VCSEL_PERIOD_B, 0x05);
+        WriteReg8(VL53L1_RANGE_CONFIG__VALID_PHASE_HIGH, 0x38);
+
+        // Dynamic config.
+        WriteReg8(VL53L1_SD_CONFIG__WOI_SD0, 0x07);
+        WriteReg8(VL53L1_SD_CONFIG__WOI_SD1, 0x05);
+        WriteReg8(VL53L1_SD_CONFIG__INITIAL_PHASE_SD0,
+                  6);  // Tuning parm default.
+        WriteReg8(VL53L1_SD_CONFIG__INITIAL_PHASE_SD1,
+                  6);  // Tuning parm default.
+        break;
+
+      case Range::kMedium:
+        // Timing config.
+        WriteReg8(VL53L1_RANGE_CONFIG__VCSEL_PERIOD_A, 0x0B);
+        WriteReg8(VL53L1_RANGE_CONFIG__VCSEL_PERIOD_B, 0x09);
+        WriteReg8(VL53L1_RANGE_CONFIG__VALID_PHASE_HIGH, 0x78);
+
+        // Dynamic config.
+        WriteReg8(VL53L1_SD_CONFIG__WOI_SD0, 0x0B);
+        WriteReg8(VL53L1_SD_CONFIG__WOI_SD1, 0x09);
+        WriteReg8(VL53L1_SD_CONFIG__INITIAL_PHASE_SD0,
+                  10);  // Tuning parm default
+        WriteReg8(VL53L1_SD_CONFIG__INITIAL_PHASE_SD1,
+                  10);  // Tuning parm default.
+        break;
+
+      case Range::kLong:
+        // Timing config.
+        WriteReg8(VL53L1_RANGE_CONFIG__VCSEL_PERIOD_A, 0x0F);
+        WriteReg8(VL53L1_RANGE_CONFIG__VCSEL_PERIOD_B, 0x0D);
+        WriteReg8(VL53L1_RANGE_CONFIG__VALID_PHASE_HIGH, 0xB8);
+
+        // Dynamic config.
+        WriteReg8(VL53L1_SD_CONFIG__WOI_SD0, 0x0F);
+        WriteReg8(VL53L1_SD_CONFIG__WOI_SD1, 0x0D);
+        WriteReg8(VL53L1_SD_CONFIG__INITIAL_PHASE_SD0,
+                  14);  // Tuning parm default.
+        WriteReg8(VL53L1_SD_CONFIG__INITIAL_PHASE_SD1,
+                  14);  // Tuning parm default.
+        break;
+    }
+  }
+
+  void SetMeasurementTimingBudget(uint32_t budget_us) {
+    budget_us = std::max(kMinMeasurementBudgetUs, budget_us);
+    budget_us -= kMinMeasurementBudgetUs;
+    budget_us = std::min(kMaxMeasurementBudgetUs, budget_us);
+
+    uint32_t range_config_timeout_us = budget_us / 2;
+    uint32_t macro_period_us;
+
+    // "Update Macro Period for Range A VCSEL Period"
+    macro_period_us =
+        CalcMacroPeriod(ReadReg8(VL53L1_RANGE_CONFIG__VCSEL_PERIOD_A));
+
+    // "Update Phase timeout - uses Timing A"
+    // Timeout of 1000 is tuning parm default
+    // (TIMED_PHASECAL_CONFIG_TIMEOUT_US_DEFAULT) via
+    // VL53L1_get_preset_mode_timing_cfg().
+    uint32_t phasecal_timeout_mclks =
+        TimeoutMicrosecondsToMclks(1000, macro_period_us);
+    if (phasecal_timeout_mclks > 0xFF) {
+      phasecal_timeout_mclks = 0xFF;
+    }
+    WriteReg8(VL53L1_PHASECAL_CONFIG__TIMEOUT_MACROP, phasecal_timeout_mclks);
+
+    // "Update MM Timing A timeout"
+    // Timeout of 1 is tuning parm default
+    // (LOWPOWERAUTO_MM_CONFIG_TIMEOUT_US_DEFAULT) via
+    // VL53L1_get_preset_mode_timing_cfg(). With the API, the register actually
+    // ends up with a slightly different value because it gets assigned,
+    // retrieved, recalculated with a different macro period, and reassigned,
+    // but it probably doesn't matter because it seems like the MM ("mode
+    // mitigation"?) sequence steps are disabled in low power auto mode anyway.
+    WriteReg16(VL53L1_MM_CONFIG__TIMEOUT_MACROP_A,
+               EncodeTimeout(TimeoutMicrosecondsToMclks(1, macro_period_us)));
+
+    // "Update Range Timing A timeout"
+    WriteReg16(VL53L1_RANGE_CONFIG__TIMEOUT_MACROP_A,
+               EncodeTimeout(TimeoutMicrosecondsToMclks(range_config_timeout_us,
+                                                        macro_period_us)));
+
+    // "Update Macro Period for Range B VCSEL Period"
+    macro_period_us =
+        CalcMacroPeriod(ReadReg8(VL53L1_RANGE_CONFIG__VCSEL_PERIOD_B));
+
+    // "Update MM Timing B timeout"
+    // (See earlier comment about MM Timing A timeout.)
+    WriteReg16(VL53L1_MM_CONFIG__TIMEOUT_MACROP_B,
+               EncodeTimeout(TimeoutMicrosecondsToMclks(1, macro_period_us)));
+
+    // "Update Range Timing B timeout"
+    WriteReg16(VL53L1_RANGE_CONFIG__TIMEOUT_MACROP_B,
+               EncodeTimeout(TimeoutMicrosecondsToMclks(range_config_timeout_us,
+                                                        macro_period_us)));
+  }
 
   int GetDistanceMM() override { return 0; }
 
@@ -112,6 +289,58 @@ class VL53L1X : public DistanceSensor {
     i2c_master_cmd_begin(kI2CPort, cmd, 1000 / portTICK_RATE_MS);
     i2c_cmd_link_delete(cmd);
   }
+
+  // Convert sequence step timeout from macro periods to microseconds with given
+  // macro period in microseconds (12.12 format)
+  static uint32_t TimeoutMclksToMicroseconds(uint32_t timeout_mclks,
+                                             uint32_t macro_period_us) {
+    return ((uint64_t)timeout_mclks * macro_period_us + 0x800) >> 12;
+  }
+
+  // Convert sequence step timeout from microseconds to macro periods with given
+  // macro period in microseconds (12.12 format)
+  static uint32_t TimeoutMicrosecondsToMclks(uint32_t timeout_us,
+                                             uint32_t macro_period_us) {
+    return (((uint32_t)timeout_us << 12) + (macro_period_us >> 1)) /
+           macro_period_us;
+  }
+
+  // Calculate macro period in microseconds (12.12 format) with given VCSEL
+  // period.
+  uint32_t CalcMacroPeriod(uint8_t vcsel_period) {
+    // fast osc frequency in 4.12 format; PLL period in 0.24 format
+    uint32_t pll_period_us = ((uint32_t)0x01 << 30) / fast_osc_frequency_;
+    uint8_t vcsel_period_pclks = (vcsel_period + 1) << 1;
+
+    // VL53L1_MACRO_PERIOD_VCSEL_PERIODS = 2304
+    uint32_t macro_period_us = (uint32_t)2304 * pll_period_us;
+    macro_period_us >>= 6;
+    macro_period_us *= vcsel_period_pclks;
+    macro_period_us >>= 6;
+
+    return macro_period_us;
+  }
+
+  static uint16_t EncodeTimeout(uint32_t timeout_mclks) {
+    // Encoded format: "(LSByte * 2^MSByte) + 1"
+    uint32_t ls_byte = 0;
+    uint16_t ms_byte = 0;
+
+    if (timeout_mclks > 0) {
+      ls_byte = timeout_mclks - 1;
+
+      while ((ls_byte & 0xFFFFFF00) > 0) {
+        ls_byte >>= 1;
+        ms_byte++;
+      }
+
+      return (ms_byte << 8) | (ls_byte & 0xFF);
+    } else {
+      return 0;
+    }
+  }
+
+  uint16_t fast_osc_frequency_ = 0;
 };
 
 // static
