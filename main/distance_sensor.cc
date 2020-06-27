@@ -299,7 +299,7 @@ class VL53L1X : public DistanceSensor {
     WriteReg8(VL53L1_DSS_CONFIG__ROI_MODE_CONTROL,
               2);  // REQUESTED_EFFFECTIVE_SPADS
 
-    SetRange(Range::kShort);
+    SetRange(Range::kMedium);
     SetMeasurementTimingBudget(50000);
 
     WriteReg16(VL53L1_ALGO__PART_TO_PART_RANGE_OFFSET_MM,
