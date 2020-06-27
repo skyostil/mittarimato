@@ -3,34 +3,62 @@
 #include "i2c.h"
 #include "third_party/VL53L1_register_map.h"
 
-class VL53L1X: public DistanceSensor {
+class VL53L1X : public DistanceSensor {
   constexpr static uint8_t kI2CAddress = 0x29;
-  
+
  public:
   VL53L1X() = default;
   ~VL53L1X() override = default;
 
-  void Start() override {
-  }
+  void Start() override {}
 
-  void Stop() override {
-  }
+  void Stop() override {}
 
-  int GetDistanceMM() override {
-    return 0;
-  }
+  int GetDistanceMM() override { return 0; }
 
  private:
   uint8_t ReadReg8(uint16_t reg) {
-    return 0;
+    auto cmd = CreateCommand(I2C_MASTER_WRITE);
+    i2c_master_write_byte(cmd, (reg >> 8) & 0xff, false);
+    i2c_master_write_byte(cmd, reg & 0xff, false);
+    SendCommand(cmd);
+
+    uint8_t value;
+    cmd = CreateCommand(I2C_MASTER_READ);
+    i2c_master_read_byte(cmd, &value, I2C_MASTER_LAST_NACK);
+    SendCommand(cmd);
+    return value;
   }
 
   uint16_t ReadReg16(uint16_t reg) {
-    return 0;
+    auto cmd = CreateCommand(I2C_MASTER_WRITE);
+    i2c_master_write_byte(cmd, (reg >> 8) & 0xff, false);
+    i2c_master_write_byte(cmd, reg & 0xff, false);
+    SendCommand(cmd);
+
+    uint8_t value_lo;
+    uint8_t value_hi;
+    cmd = CreateCommand(I2C_MASTER_READ);
+    i2c_master_read_byte(cmd, &value_hi, I2C_MASTER_ACK);
+    i2c_master_read_byte(cmd, &value_lo, I2C_MASTER_LAST_NACK);
+    SendCommand(cmd);
+    return (value_hi << 8) | value_lo;
   }
 
   uint32_t ReadReg32(uint16_t reg) {
-    return 0;
+    auto cmd = CreateCommand(I2C_MASTER_WRITE);
+    i2c_master_write_byte(cmd, (reg >> 8) & 0xff, false);
+    i2c_master_write_byte(cmd, reg & 0xff, false);
+    SendCommand(cmd);
+
+    uint8_t values[4];
+    cmd = CreateCommand(I2C_MASTER_READ);
+    i2c_master_read_byte(cmd, &values[0], I2C_MASTER_ACK);
+    i2c_master_read_byte(cmd, &values[1], I2C_MASTER_ACK);
+    i2c_master_read_byte(cmd, &values[2], I2C_MASTER_ACK);
+    i2c_master_read_byte(cmd, &values[3], I2C_MASTER_LAST_NACK);
+    SendCommand(cmd);
+    return (values[0] << 24) | (values[1] << 16) | (values[2] << 8) | values[3];
   }
 
   void WriteReg8(uint16_t reg, uint8_t value) {
