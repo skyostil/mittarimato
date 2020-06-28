@@ -1,0 +1,40 @@
+# WireViz wiring diagram.
+# See https://github.com/formatc1702/WireViz/
+connectors:
+  ESP8266:
+    pinout: [
+      GND,
+      VCC (3v3),
+      SDA (D1 / GPIO 4),
+      SCL (D2 / GPIO 5),
+      SCLK (D5 / GPIO 14),
+      MOSI (D7 / GPIO 13),
+      RST (D6 / GPIO 12),
+      DC (D8 / GPIO 15),
+      CS (D0 / GPIO 16),
+    ]
+  VL53L1X:
+    pinout: [INT, SHUT, SCL, SDA, GND, VCC]
+    notes: I2C address 0x29
+  RGB OLED:
+    subtype: SSD1331
+    pinout: [VCC, GND, NC, DIN/SDA, CLK, CS, D/C, RES]
+    notes: HSPI
+
+cables:
+  Wire 1:
+    wirecount: 4
+    colors: [BK, RD, BU, YE]
+  Wire 2:
+    wirecount: 7
+    color_code: IEC
+
+connections:
+  -
+    - ESP8266: [1-4]
+    - Wire 1: [1-4]
+    - VL53L1X: [5, 6, 4, 3]
+  -
+    - ESP8266: [1,2,5,6,7,8,9]
+    - Wire 2: [1-7]
+    - RGB OLED: [2,1,5,4,8,7,6]
