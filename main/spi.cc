@@ -6,7 +6,7 @@ void SetupSPI() {
   spi_config_t config;
   memset(&config, 0, sizeof(config));
   config.mode = SPI_MASTER_MODE;
-  config.clk_div = SPI_80MHz_DIV;
+  config.clk_div = SPI_8MHz_DIV;  // SSD1331 min clock cycle: 150ns.
   spi_init(HSPI_HOST, &config);
 
   spi_interface_t interface;

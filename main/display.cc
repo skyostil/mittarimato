@@ -83,7 +83,7 @@ class SSD1331 : public Display {
     WriteCommand(0x0);
     WriteCommand(CMD_DISPLAYOFFSET);  // 0xA2
     WriteCommand(0x0);
-    // WriteCommand(CMD_NORMALDISPLAY);  // 0xA4  -- Makes the screen go blank?
+    WriteCommand(CMD_NORMALDISPLAY);  // 0xA4
     WriteCommand(CMD_SETMULTIPLEX);  // 0xA8
     WriteCommand(0x3F);              // 0x3F 1/64 duty
     WriteCommand(CMD_SETMASTER);     // 0xAD
@@ -115,7 +115,7 @@ class SSD1331 : public Display {
     WriteCommand(0x7D | 0xff);
     WriteCommand(CMD_DISPLAYON);  // Turn on the panel.
 
-    Fill(31, 31, 63);
+    Fill(31, 63, 31);
   }
 
   ~SSD1331() = default;
@@ -153,8 +153,6 @@ class SSD1331 : public Display {
     trans.cmd = &cmd;
     trans.bits.cmd = 8;
     spi_trans(HSPI_HOST, &trans);
-    // TODO: Fix timing so we don't need to delay here.
-    printf("%d\n", 0);
     gpio_set_level(kPinCS, 1);
   }
 
