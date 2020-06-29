@@ -11,6 +11,9 @@ class SSD1331 : public Display {
   constexpr static gpio_num_t kPinRES = GPIO_NUM_12;  // D6 <--> RES
   constexpr static gpio_num_t kPinCS = GPIO_NUM_16;   // D0 <--> CS
   constexpr static gpio_num_t kPinDC = GPIO_NUM_15;   // D8 <--> D/C
+  constexpr static size_t kWidth = 96;
+  constexpr static size_t kHeight = 64;
+  constexpr static size_t kBitsPerPixel = 16;
 
   enum Command {
     CMD_DRAWLINE = 0x21,
@@ -84,9 +87,9 @@ class SSD1331 : public Display {
     WriteCommand(CMD_DISPLAYOFFSET);  // 0xA2
     WriteCommand(0x0);
     WriteCommand(CMD_NORMALDISPLAY);  // 0xA4
-    WriteCommand(CMD_SETMULTIPLEX);  // 0xA8
-    WriteCommand(0x3F);              // 0x3F 1/64 duty
-    WriteCommand(CMD_SETMASTER);     // 0xAD
+    WriteCommand(CMD_SETMULTIPLEX);   // 0xA8
+    WriteCommand(0x3F);               // 0x3F 1/64 duty
+    WriteCommand(CMD_SETMASTER);      // 0xAD
     WriteCommand(0x8E);
     WriteCommand(CMD_POWERMODE);  // 0xB0
     WriteCommand(0x0B);
@@ -115,13 +118,23 @@ class SSD1331 : public Display {
     WriteCommand(0x7D | 0xff);
     WriteCommand(CMD_DISPLAYON);  // Turn on the panel.
 
-    Fill(31, 63, 31);
+    // Fill(31, 63, 31);
+
+    for (size_t y = 0; y < kHeight; y++) {
+      for (size_t x = 0; x < kWidth; x++) {
+        uint16_t r = ((1 << 5) - 1) * (((x % 16) < 8) ? 1 : 0);
+        uint16_t g = ((1 << 6) - 1) * 0;
+        uint16_t b = ((1 << 5) - 1) * (((y % 16) < 8) ? 1 : 0);
+        pixels_[(y * kWidth + x)] = r | (g << 5) | (b << 11);
+      }
+    }
+    Present();
   }
 
   ~SSD1331() = default;
 
-  size_t Width() override { return 96; }
-  size_t Height() override { return 64; }
+  size_t Width() override { return kWidth; }
+  size_t Height() override { return kHeight; }
 
   void Fill(uint8_t r, uint8_t g, uint8_t b) {
     WriteCommand(CMD_FILL);
@@ -130,8 +143,8 @@ class SSD1331 : public Display {
     WriteCommand(CMD_DRAWRECT);
     WriteCommand(0);
     WriteCommand(0);
-    WriteCommand(Width() - 1);
-    WriteCommand(Height() - 1);
+    WriteCommand(kWidth - 1);
+    WriteCommand(kHeight - 1);
 
     // Outline color (6 bit range).
     WriteCommand(r);
@@ -142,6 +155,27 @@ class SSD1331 : public Display {
     WriteCommand(r);
     WriteCommand(g);
     WriteCommand(b);
+  }
+
+  void Present() {
+    WriteCommand(CMD_SETCOLUMN);
+    WriteCommand(0);
+    WriteCommand(kWidth - 1);
+    WriteCommand(CMD_SETROW);
+    WriteCommand(0);
+    WriteCommand(kHeight - 1);
+
+    const uint32_t* pixels = reinterpret_cast<const uint32_t*>(&pixels_[0]);
+    const uint32_t* pixels_end =
+        reinterpret_cast<const uint32_t*>(&pixels_[pixels_.size()]);
+    constexpr size_t kChunkSizeBytes = 16;
+    static_assert((kWidth * kHeight * kBitsPerPixel / 8) % kChunkSizeBytes == 0,
+                  "Partial chunks not supported");
+    while (pixels < pixels_end) {
+      WriteData(pixels, kChunkSizeBytes);
+      pixels += kChunkSizeBytes / sizeof(uint32_t);
+      os_delay_us(10);
+    }
   }
 
  private:
@@ -156,16 +190,18 @@ class SSD1331 : public Display {
     gpio_set_level(kPinCS, 1);
   }
 
-  void WriteData(uint16_t data) {
+  void WriteData(const uint32_t* data, size_t bytes) {
     gpio_set_level(kPinDC, 1);
     gpio_set_level(kPinCS, 0);
     spi_trans_t trans;
     memset(&trans, 0, sizeof(trans));
-    trans.cmd = &data;
-    trans.bits.cmd = 8;
+    trans.mosi = const_cast<uint32_t*>(data);
+    trans.bits.mosi = bytes * 8;
     spi_trans(HSPI_HOST, &trans);
     gpio_set_level(kPinCS, 1);
   }
+
+  std::array<uint16_t, kWidth * kHeight * kBitsPerPixel / 16> pixels_;
 };
 
 // static
