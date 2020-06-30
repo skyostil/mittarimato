@@ -6,7 +6,9 @@ void SetupSPI() {
   spi_config_t config;
   memset(&config, 0, sizeof(config));
   config.mode = SPI_MASTER_MODE;
-  config.clk_div = SPI_8MHz_DIV;  // SSD1331 min clock cycle: 150ns.
+  // SSD1331's min clock cycle is 150ns, which would mean ~6.7 MHz, but this
+  // panel seems stable up to 40 MHz.
+  config.clk_div = SPI_40MHz_DIV;
   spi_init(HSPI_HOST, &config);
 
   spi_interface_t interface;

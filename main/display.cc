@@ -4,6 +4,7 @@
 
 #include <FreeRTOS.h>
 #include <driver/gpio.h>
+#include <freertos/task.h>
 #include <string.h>
 
 // Driver for the SSD1331 RGB OLED panel. Based on Adafruit_SSD1331.
@@ -18,6 +19,7 @@ class SSD1331 : public Display {
   enum Command {
     CMD_DRAWLINE = 0x21,
     CMD_DRAWRECT = 0x22,
+    CMD_CLEAR = 0x25,
     CMD_FILL = 0x26,
     CMD_SETCOLUMN = 0x15,
     CMD_SETROW = 0x75,
@@ -119,22 +121,37 @@ class SSD1331 : public Display {
     WriteCommand(CMD_DISPLAYON);  // Turn on the panel.
 
     // Fill(31, 63, 31);
+    Clear();
 
     for (size_t y = 0; y < kHeight; y++) {
       for (size_t x = 0; x < kWidth; x++) {
         uint16_t r = ((1 << 5) - 1) * (((x % 16) < 8) ? 1 : 0);
-        uint16_t g = ((1 << 6) - 1) * 0;
+        uint16_t g = ((1 << 6) - 1) * (((x % 32) < 16) ? 1 : 0);
         uint16_t b = ((1 << 5) - 1) * (((y % 16) < 8) ? 1 : 0);
         pixels_[(y * kWidth + x)] = r | (g << 5) | (b << 11);
       }
     }
-    Present();
+
+    auto start = xTaskGetTickCount();
+    int frames = 100;
+    for (int i = 0; i < frames; i++)
+      Present();
+    auto diff = static_cast<float>(xTaskGetTickCount() - start) / frames;
+    printf("%.2f ticks, %.2f ms\n", diff, (1000 / xPortGetTickRateHz()) * diff);
   }
 
   ~SSD1331() = default;
 
   size_t Width() override { return kWidth; }
   size_t Height() override { return kHeight; }
+
+  void Clear() {
+    WriteCommand(CMD_CLEAR);
+    WriteCommand(0);
+    WriteCommand(0);
+    WriteCommand(kWidth - 1);
+    WriteCommand(kHeight - 1);
+  }
 
   void Fill(uint8_t r, uint8_t g, uint8_t b) {
     WriteCommand(CMD_FILL);
@@ -158,23 +175,23 @@ class SSD1331 : public Display {
   }
 
   void Present() {
+    static int offset = 0;
     WriteCommand(CMD_SETCOLUMN);
     WriteCommand(0);
     WriteCommand(kWidth - 1);
     WriteCommand(CMD_SETROW);
-    WriteCommand(0);
+    WriteCommand(offset++ % 16);
     WriteCommand(kHeight - 1);
 
     const uint32_t* pixels = reinterpret_cast<const uint32_t*>(&pixels_[0]);
     const uint32_t* pixels_end =
         reinterpret_cast<const uint32_t*>(&pixels_[pixels_.size()]);
-    constexpr size_t kChunkSizeBytes = 16;
+    constexpr size_t kChunkSizeBytes = 64;
     static_assert((kWidth * kHeight * kBitsPerPixel / 8) % kChunkSizeBytes == 0,
                   "Partial chunks not supported");
     while (pixels < pixels_end) {
       WriteData(pixels, kChunkSizeBytes);
       pixels += kChunkSizeBytes / sizeof(uint32_t);
-      os_delay_us(10);
     }
   }
 
@@ -187,7 +204,6 @@ class SSD1331 : public Display {
     trans.cmd = &cmd;
     trans.bits.cmd = 8;
     spi_trans(HSPI_HOST, &trans);
-    gpio_set_level(kPinCS, 1);
   }
 
   void WriteData(const uint32_t* data, size_t bytes) {
@@ -198,7 +214,6 @@ class SSD1331 : public Display {
     trans.mosi = const_cast<uint32_t*>(data);
     trans.bits.mosi = bytes * 8;
     spi_trans(HSPI_HOST, &trans);
-    gpio_set_level(kPinCS, 1);
   }
 
   std::array<uint16_t, kWidth * kHeight * kBitsPerPixel / 16> pixels_;
