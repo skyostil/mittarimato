@@ -122,7 +122,7 @@ class SSD1331 : public Display {
 
     // Fill(31, 63, 31);
     Clear();
-
+#if 0
     for (size_t y = 0; y < kHeight; y++) {
       for (size_t x = 0; x < kWidth; x++) {
         uint16_t r = ((1 << 5) - 1) * (((x % 16) < 8) ? 1 : 0);
@@ -138,6 +138,7 @@ class SSD1331 : public Display {
       Present();
     auto diff = static_cast<float>(xTaskGetTickCount() - start) / frames;
     printf("%.2f ticks, %.2f ms\n", diff, (1000 / xPortGetTickRateHz()) * diff);
+#endif
   }
 
   ~SSD1331() = default;
@@ -174,22 +175,27 @@ class SSD1331 : public Display {
     WriteCommand(b);
   }
 
-  void Present() {
-    static int offset = 0;
+  constexpr static size_t kChunkSizeBytes = 64;
+  size_t RenderBatchSize() override {
+    return kChunkSizeBytes / (kBitsPerPixel / 8);
+  }
+
+  void Render(const Renderer& renderer) {
     WriteCommand(CMD_SETCOLUMN);
     WriteCommand(0);
     WriteCommand(kWidth - 1);
     WriteCommand(CMD_SETROW);
-    WriteCommand(offset++ % 16);
+    WriteCommand(0);
     WriteCommand(kHeight - 1);
 
-    const uint32_t* pixels = reinterpret_cast<const uint32_t*>(&pixels_[0]);
-    const uint32_t* pixels_end =
-        reinterpret_cast<const uint32_t*>(&pixels_[pixels_.size()]);
-    constexpr size_t kChunkSizeBytes = 64;
+    uint32_t* pixels = reinterpret_cast<uint32_t*>(&pixels_[0]);
+    uint32_t* pixels_end =
+        reinterpret_cast<uint32_t*>(&pixels_[pixels_.size()]);
     static_assert((kWidth * kHeight * kBitsPerPixel / 8) % kChunkSizeBytes == 0,
                   "Partial chunks not supported");
+
     while (pixels < pixels_end) {
+      renderer(pixels);
       WriteData(pixels, kChunkSizeBytes);
       pixels += kChunkSizeBytes / sizeof(uint32_t);
     }
