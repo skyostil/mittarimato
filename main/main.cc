@@ -15,40 +15,42 @@ class RainbowFX {
   // Must match display.
   static constexpr uint8_t kRenderBatchPixels = 32;
 
-  RainbowFX(size_t width, size_t height);
+  RainbowFX();
   ~RainbowFX();
 
-  void BeginRender(size_t render_batch_size);
+  void BeginRender();
   void Render(uint32_t* pixels);
 
  private:
   size_t width_;
   size_t height_;
-  uint32_t* ss_pixels_;
+  std::array<uint32_t,
+             Display::kWidth * Display::kHeight * Display::kBitsPerPixel / 16 /
+                 sizeof(uint32_t)>
+      ss_pixels_;
 
   uint32_t* ss_pointer_ = nullptr;
 };
 
-RainbowFX::RainbowFX(size_t width, size_t height)
-    : width_(width),
-      height_(height),
-      ss_pixels_(reinterpret_cast<uint32_t*>(
-          malloc(width * kSuperSampling * height * kSuperSampling *
-                 kSuperSamplingBitsPerPixel / sizeof(uint32_t)))) {}
-
-RainbowFX::~RainbowFX() {
-  // TODO: Why doesn't new[] work?
-  free(ss_pixels_);
+RainbowFX::RainbowFX() {
+  for (size_t y = 0; y < Display::kHeight; y++) {
+    for (size_t x = 0; x < Display::kWidth; x++) {
+      uint16_t r = ((1 << 5) - 1) * (((x % 16) < 8) ? 1 : 0);
+      uint16_t g = ((1 << 6) - 1) * (((x % 32) < 16) ? 1 : 0);
+      uint16_t b = ((1 << 5) - 1) * (((y % 16) < 8) ? 1 : 0);
+      ss_pixels_[(y * Display::kWidth + x)] = r | (g << 5) | (b << 11);
+    }
+  }
 }
+RainbowFX::~RainbowFX() = default;
 
-void RainbowFX::BeginRender(size_t render_batch_pixels) {
-  assert(render_batch_pixels == kRenderBatchPixels);
-  ss_pointer_ = ss_pixels_;
+void RainbowFX::BeginRender() {
+  ss_pointer_ = &ss_pixels_[0];
 }
 
 void RainbowFX::Render(uint32_t* pixels) {
   // TODO: Supersample down to 1x.
-  for (size_t i = 0; i < kRenderBatchPixels / 2; i++) {
+  for (size_t i = 0; i < Display::kRenderBatchPixels / 2; i++) {
     *pixels++ = *ss_pointer_++;
   }
 }
@@ -57,12 +59,12 @@ extern "C" void app_main() {
   SetupI2C();
   SetupSPI();
 
-  auto display = Display::Create();
+  auto display = std::unique_ptr<Display>(new Display());
   auto distance_sensor = DistanceSensor::Create();
 
-  RainbowFX rainbow_fx(display->Width(), display->Height());
-  rainbow_fx.BeginRender(display->RenderBatchSize());
-  display->Render([&](uint32_t* pixels) { rainbow_fx.Render(pixels); });
+  auto rainbow_fx = std::unique_ptr<RainbowFX>(new RainbowFX());
+  rainbow_fx->BeginRender();
+  display->Render([&](uint32_t* pixels) { rainbow_fx->Render(pixels); });
 
   distance_sensor->Start(100);
 

@@ -1,18 +1,115 @@
 #pragma once
 
-#include <functional>
+#include <driver/gpio.h>
 #include <memory>
+#include <string.h>
 
-class Display {
+#include "spi.h"
+
+// Driver for the SSD1331 RGB OLED panel. Based on Adafruit_SSD1331.
+class SSD1331 {
+  constexpr static gpio_num_t kPinRES = GPIO_NUM_12;  // D6 <--> RES
+  constexpr static gpio_num_t kPinCS = GPIO_NUM_16;   // D0 <--> CS
+  constexpr static gpio_num_t kPinDC = GPIO_NUM_15;   // D8 <--> D/C
+  constexpr static size_t kChunkSizeBytes = 64;
+
+  enum Command {
+    CMD_DRAWLINE = 0x21,
+    CMD_DRAWRECT = 0x22,
+    CMD_CLEAR = 0x25,
+    CMD_FILL = 0x26,
+    CMD_SETCOLUMN = 0x15,
+    CMD_SETROW = 0x75,
+    CMD_CONTRASTA = 0x81,
+    CMD_CONTRASTB = 0x82,
+    CMD_CONTRASTC = 0x83,
+    CMD_MASTERCURRENT = 0x87,
+    CMD_SETREMAP = 0xA0,
+    CMD_STARTLINE = 0xA1,
+    CMD_DISPLAYOFFSET = 0xA2,
+    CMD_NORMALDISPLAY = 0xA4,
+    CMD_DISPLAYALLON = 0xA5,
+    CMD_DISPLAYALLOFF = 0xA6,
+    CMD_INVERTDISPLAY = 0xA7,
+    CMD_SETMULTIPLEX = 0xA8,
+    CMD_SETMASTER = 0xAD,
+    CMD_DISPLAYOFF = 0xAE,
+    CMD_DISPLAYON = 0xAF,
+    CMD_POWERMODE = 0xB0,
+    CMD_PRECHARGE = 0xB1,
+    CMD_CLOCKDIV = 0xB3,
+    CMD_PRECHARGEA = 0x8A,
+    CMD_PRECHARGEB = 0x8B,
+    CMD_PRECHARGEC = 0x8C,
+    CMD_PRECHARGELEVEL = 0xBB,
+    CMD_VCOMH = 0xBE,
+  };
+
+  enum ColorOrder {
+    COLOR_ORDER_RGB,
+    COLOR_ORDER_BGR,
+  };
+
+  constexpr static ColorOrder kColorOrder = COLOR_ORDER_RGB;
+
  public:
-  virtual ~Display() = default;
+  // Number of pixels the renderer should produce per batch.
+  constexpr static uint8_t kWidth = 96;
+  constexpr static uint8_t kHeight = 64;
+  constexpr static uint8_t kBitsPerPixel = 16;
+  constexpr static uint8_t kRenderBatchPixels =
+      kChunkSizeBytes / (kBitsPerPixel / 8);
 
-  virtual size_t Width() = 0;
-  virtual size_t Height() = 0;
+  SSD1331();
+  ~SSD1331();
 
-  using Renderer = std::function<void(uint32_t*)>;
-  virtual size_t RenderBatchSize() = 0;
-  virtual void Render(const Renderer&) = 0;
+  void Clear();
+  void Fill(uint8_t r, uint8_t g, uint8_t b);
 
-  static std::unique_ptr<Display> Create();
+  template <typename Renderer>
+  void Render(const Renderer& renderer) {
+    WriteCommand(CMD_SETCOLUMN);
+    WriteCommand(0);
+    WriteCommand(kWidth - 1);
+    WriteCommand(CMD_SETROW);
+    WriteCommand(0);
+    WriteCommand(kHeight - 1);
+
+    uint32_t* pixels = reinterpret_cast<uint32_t*>(&pixels_[0]);
+    uint32_t* pixels_end =
+        reinterpret_cast<uint32_t*>(&pixels_[pixels_.size()]);
+    static_assert((kWidth * kHeight * kBitsPerPixel / 8) % kChunkSizeBytes == 0,
+                  "Partial chunks not supported");
+
+    while (pixels < pixels_end) {
+      renderer(pixels);
+      WriteData(pixels, kChunkSizeBytes);
+      pixels += kChunkSizeBytes / sizeof(uint32_t);
+    }
+  }
+
+ private:
+  void WriteCommand(uint16_t cmd) {
+    gpio_set_level(kPinDC, 0);
+    gpio_set_level(kPinCS, 0);
+    spi_trans_t trans;
+    memset(&trans, 0, sizeof(trans));
+    trans.cmd = &cmd;
+    trans.bits.cmd = 8;
+    spi_trans(HSPI_HOST, &trans);
+  }
+
+  void WriteData(const uint32_t* data, size_t bytes) {
+    gpio_set_level(kPinDC, 1);
+    gpio_set_level(kPinCS, 0);
+    spi_trans_t trans;
+    memset(&trans, 0, sizeof(trans));
+    trans.mosi = const_cast<uint32_t*>(data);
+    trans.bits.mosi = bytes * 8;
+    spi_trans(HSPI_HOST, &trans);
+  }
+
+  std::array<uint16_t, kWidth * kHeight * kBitsPerPixel / 16> pixels_;
 };
+
+using Display = SSD1331;
