@@ -6,11 +6,15 @@
 #include "distance_sensor.h"
 #include "i2c.h"
 #include "spi.h"
+#include "util.h"
 
 class RainbowFX {
  public:
+  static constexpr auto kBitsPerPixel = Display::kBitsPerPixel;
   static constexpr int kSuperSampling = 1;
   static constexpr int kSuperSamplingBitsPerPixel = 16;
+  static constexpr auto kWidth = Display::kWidth * kSuperSampling;
+  static constexpr auto kHeight = Display::kHeight * kSuperSampling;
 
   // Must match display.
   static constexpr uint8_t kRenderBatchPixels = 32;
@@ -22,36 +26,36 @@ class RainbowFX {
   void Render(uint32_t* pixels);
 
  private:
-  size_t width_;
-  size_t height_;
-  std::array<uint32_t,
-             Display::kWidth * Display::kHeight * Display::kBitsPerPixel / 16 /
-                 sizeof(uint32_t)>
-      ss_pixels_;
+  std::array<uint16_t, kWidth * kHeight * kBitsPerPixel / 8 / sizeof(uint16_t)>
+      backbuffer_pixels_ __attribute__((aligned));
 
-  uint32_t* ss_pointer_ = nullptr;
+  const uint32_t* backbuffer_ptr_ = nullptr;
 };
 
 RainbowFX::RainbowFX() {
-  for (size_t y = 0; y < Display::kHeight; y++) {
-    for (size_t x = 0; x < Display::kWidth; x++) {
+  for (size_t y = 0; y < kHeight; y++) {
+    for (size_t x = 0; x < kWidth; x++) {
       uint16_t r = ((1 << 5) - 1) * (((x % 16) < 8) ? 1 : 0);
       uint16_t g = ((1 << 6) - 1) * (((x % 32) < 16) ? 1 : 0);
       uint16_t b = ((1 << 5) - 1) * (((y % 16) < 8) ? 1 : 0);
-      ss_pixels_[(y * Display::kWidth + x)] = r | (g << 5) | (b << 11);
+      backbuffer_pixels_[(y * kWidth + x)] = r | (g << 5) | (b << 11);
     }
   }
 }
 RainbowFX::~RainbowFX() = default;
 
 void RainbowFX::BeginRender() {
-  ss_pointer_ = &ss_pixels_[0];
+  backbuffer_ptr_ = reinterpret_cast<const uint32_t*>(&backbuffer_pixels_[0]);
 }
 
-void RainbowFX::Render(uint32_t* pixels) {
+inline void RainbowFX::Render(uint32_t* pixels) {
   // TODO: Supersample down to 1x.
-  for (size_t i = 0; i < Display::kRenderBatchPixels / 2; i++) {
-    *pixels++ = *ss_pointer_++;
+  if (kSuperSampling == 1) {
+    for (size_t i = 0; i < Display::kRenderBatchPixels * kBitsPerPixel /
+                               (sizeof(uint32_t) * 8);
+         i++) {
+      *pixels++ = *backbuffer_ptr_++;
+    }
   }
 }
 
@@ -63,8 +67,11 @@ extern "C" void app_main() {
   auto distance_sensor = DistanceSensor::Create();
 
   auto rainbow_fx = std::unique_ptr<RainbowFX>(new RainbowFX());
-  rainbow_fx->BeginRender();
-  display->Render([&](uint32_t* pixels) { rainbow_fx->Render(pixels); });
+  Benchmark([&] {
+    rainbow_fx->BeginRender();
+    display->Render([&](uint32_t* pixels) { rainbow_fx->Render(pixels); });
+  });
+  printf("heap free: %d\n", esp_get_free_heap_size());
 
   distance_sensor->Start(100);
 

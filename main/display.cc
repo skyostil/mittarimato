@@ -3,6 +3,8 @@
 #include <FreeRTOS.h>
 #include <freertos/task.h>
 
+#include "util.h"
+
 SSD1331::SSD1331() {
   constexpr gpio_config_t kConfig = {
       .pin_bit_mask = (1 << kPinRES) | (1 << kPinDC) | (1 << kPinCS),
@@ -70,6 +72,7 @@ SSD1331::SSD1331() {
   // Fill(31, 63, 31);
   Clear();
 #if 0
+  if (!kRenderInBatches) {
     for (size_t y = 0; y < kHeight; y++) {
       for (size_t x = 0; x < kWidth; x++) {
         uint16_t r = ((1 << 5) - 1) * (((x % 16) < 8) ? 1 : 0);
@@ -78,13 +81,9 @@ SSD1331::SSD1331() {
         pixels_[(y * kWidth + x)] = r | (g << 5) | (b << 11);
       }
     }
+  }
 
-    auto start = xTaskGetTickCount();
-    int frames = 100;
-    for (int i = 0; i < frames; i++)
-      Present();
-    auto diff = static_cast<float>(xTaskGetTickCount() - start) / frames;
-    printf("%.2f ticks, %.2f ms\n", diff, (1000 / xPortGetTickRateHz()) * diff);
+  Benchmark([&] { Render([](uint32_t*) {}); });
 #endif
 }
 

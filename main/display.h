@@ -1,8 +1,8 @@
 #pragma once
 
 #include <driver/gpio.h>
-#include <memory>
 #include <string.h>
+#include <memory>
 
 #include "spi.h"
 
@@ -53,12 +53,18 @@ class SSD1331 {
   constexpr static ColorOrder kColorOrder = COLOR_ORDER_RGB;
 
  public:
-  // Number of pixels the renderer should produce per batch.
   constexpr static uint8_t kWidth = 96;
   constexpr static uint8_t kHeight = 64;
   constexpr static uint8_t kBitsPerPixel = 16;
-  constexpr static uint8_t kRenderBatchPixels =
-      kChunkSizeBytes / (kBitsPerPixel / 8);
+
+  // Whether to render in small batches to parallelize with the DMA update or
+  // all at once.
+  constexpr static bool kRenderInBatches = true;
+
+  // Number of pixels the renderer should produce per batch.
+  constexpr static auto kRenderBatchPixels =
+      kRenderInBatches ? (kChunkSizeBytes / (kBitsPerPixel / 8))
+                       : (kWidth * kHeight);
 
   SSD1331();
   ~SSD1331();
@@ -67,7 +73,7 @@ class SSD1331 {
   void Fill(uint8_t r, uint8_t g, uint8_t b);
 
   template <typename Renderer>
-  void Render(const Renderer& renderer) {
+  inline void Render(const Renderer& renderer) {
     WriteCommand(CMD_SETCOLUMN);
     WriteCommand(0);
     WriteCommand(kWidth - 1);
@@ -76,15 +82,26 @@ class SSD1331 {
     WriteCommand(kHeight - 1);
 
     uint32_t* pixels = reinterpret_cast<uint32_t*>(&pixels_[0]);
-    uint32_t* pixels_end =
-        reinterpret_cast<uint32_t*>(&pixels_[pixels_.size()]);
     static_assert((kWidth * kHeight * kBitsPerPixel / 8) % kChunkSizeBytes == 0,
                   "Partial chunks not supported");
 
-    while (pixels < pixels_end) {
+    if (kRenderInBatches) {
+      // Render the screen in small batches to parallelize with the screen
+      // update DMA.
+      size_t batch_count = kWidth * kHeight / kRenderBatchPixels;
+      while (batch_count--) {
+        renderer(pixels);
+        WriteData(pixels, kChunkSizeBytes);
+      }
+    } else {
+      // Render the entire screen up front and then scan out.
       renderer(pixels);
-      WriteData(pixels, kChunkSizeBytes);
-      pixels += kChunkSizeBytes / sizeof(uint32_t);
+      const uint32_t* pixels_end =
+          reinterpret_cast<const uint32_t*>(&pixels_[pixels_.size()]);
+      while (pixels < pixels_end) {
+        WriteData(pixels, kChunkSizeBytes);
+        pixels += kChunkSizeBytes / sizeof(uint32_t);
+      }
     }
   }
 
@@ -109,7 +126,10 @@ class SSD1331 {
     spi_trans(HSPI_HOST, &trans);
   }
 
-  std::array<uint16_t, kWidth * kHeight * kBitsPerPixel / 16> pixels_;
+  std::array<uint16_t,
+             (kRenderInBatches ? kRenderBatchPixels : (kWidth * kHeight)) *
+                 kBitsPerPixel / 16>
+      pixels_ __attribute__((aligned));
 };
 
 using Display = SSD1331;
