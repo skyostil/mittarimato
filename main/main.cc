@@ -4,6 +4,7 @@
 
 #include "display.h"
 #include "distance_sensor.h"
+#include "font.h"
 #include "i2c.h"
 #include "spi.h"
 #include "util.h"
@@ -61,6 +62,13 @@ RainbowFX::RainbowFX() {
       backbuffer_pixels_[(y * kWidth + x)] = x ^ y;
     }
   }
+
+  // const auto& g = glyphs[0];
+  // for (size_t y = 0; y < g.height; y++) {
+  //  uint32_t glyph_data;
+  //  for (size_t x = 0; x < g.width; x++) {
+  //  }
+  //}
 }
 RainbowFX::~RainbowFX() = default;
 
@@ -68,7 +76,7 @@ void RainbowFX::BeginRender() {
   backbuffer_ptr_ = &backbuffer_pixels_[0];
 }
 
-inline void RainbowFX::Render(uint32_t* pixels) {
+inline void ICACHE_RAM_ATTR RainbowFX::Render(uint32_t* pixels) {
   if (kSuperSampling == 1) {
     for (size_t i = 0; i < Display::kRenderBatchPixels *
                                Display::kBitsPerPixel / (sizeof(uint32_t) * 8);
