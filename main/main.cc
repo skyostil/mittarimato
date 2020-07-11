@@ -8,16 +8,35 @@
 #include "spi.h"
 #include "util.h"
 
+// clang-format off
+// Based on https://lospec.com/palette-list/sweetie-16
+static constexpr std::array<uint16_t, 16> palette_ = {
+  PackRGB565(0x1a1c2c),
+  PackRGB565(0x5d275d),
+  PackRGB565(0xb13e53),
+  PackRGB565(0xef7d57),
+  PackRGB565(0xffcd75),
+  PackRGB565(0xa7f070),
+  PackRGB565(0x38b764),
+  PackRGB565(0x257179),
+  PackRGB565(0x29366f),
+  PackRGB565(0x3b5dc9),
+  PackRGB565(0x41a6f6),
+  PackRGB565(0x73eff7),
+  PackRGB565(0x333c57),
+  PackRGB565(0x566c86),
+  PackRGB565(0x94b0c2),
+  PackRGB565(0xf4f4f4),
+};
+// clang-format on
+
 class RainbowFX {
  public:
-  static constexpr auto kBitsPerPixel = Display::kBitsPerPixel;
+  static constexpr auto kBackbufferBitsPerPixel = 4;
   static constexpr int kSuperSampling = 1;
   static constexpr int kSuperSamplingBitsPerPixel = 16;
   static constexpr auto kWidth = Display::kWidth * kSuperSampling;
   static constexpr auto kHeight = Display::kHeight * kSuperSampling;
-
-  // Must match display.
-  static constexpr uint8_t kRenderBatchPixels = 32;
 
   RainbowFX();
   ~RainbowFX();
@@ -26,36 +45,41 @@ class RainbowFX {
   void Render(uint32_t* pixels);
 
  private:
-  std::array<uint16_t, kWidth * kHeight * kBitsPerPixel / 8 / sizeof(uint16_t)>
+  // The backbuffer is 4 bits per pixel (paletted).
+  std::array<uint8_t, kWidth * kHeight * kBackbufferBitsPerPixel / 8>
       backbuffer_pixels_ __attribute__((aligned));
 
-  const uint32_t* backbuffer_ptr_ = nullptr;
+  const uint8_t* backbuffer_ptr_ = nullptr;
 };
 
 RainbowFX::RainbowFX() {
   for (size_t y = 0; y < kHeight; y++) {
     for (size_t x = 0; x < kWidth; x++) {
-      uint16_t r = ((1 << 5) - 1) * (((x % 16) < 8) ? 1 : 0);
-      uint16_t g = ((1 << 6) - 1) * (((x % 32) < 16) ? 1 : 0);
-      uint16_t b = ((1 << 5) - 1) * (((y % 16) < 8) ? 1 : 0);
-      backbuffer_pixels_[(y * kWidth + x)] = r | (g << 5) | (b << 11);
+      // uint16_t r = ((1 << 5) - 1) * (((x % 16) < 8) ? 1 : 0);
+      // uint16_t g = ((1 << 6) - 1) * (((x % 32) < 16) ? 1 : 0);
+      // uint16_t b = ((1 << 5) - 1) * (((y % 16) < 8) ? 1 : 0);
+      backbuffer_pixels_[(y * kWidth + x)] = x ^ y;
     }
   }
 }
 RainbowFX::~RainbowFX() = default;
 
 void RainbowFX::BeginRender() {
-  backbuffer_ptr_ = reinterpret_cast<const uint32_t*>(&backbuffer_pixels_[0]);
+  backbuffer_ptr_ = &backbuffer_pixels_[0];
 }
 
 inline void RainbowFX::Render(uint32_t* pixels) {
-  // TODO: Supersample down to 1x.
   if (kSuperSampling == 1) {
-    for (size_t i = 0; i < Display::kRenderBatchPixels * kBitsPerPixel /
-                               (sizeof(uint32_t) * 8);
+    for (size_t i = 0; i < Display::kRenderBatchPixels *
+                               Display::kBitsPerPixel / (sizeof(uint32_t) * 8);
          i++) {
-      *pixels++ = *backbuffer_ptr_++;
+      // Each backbuffer byte expands into two 16 bit pixels.
+      uint8_t pair = *backbuffer_ptr_++;
+      uint16_t p0 = palette_[pair & 0b00001111];
+      uint16_t p1 = palette_[(pair & 0b11110000) >> 4];
+      *pixels++ = p0 | (p1 << 16);
     }
+  } else if (kSuperSampling == 2) {
   }
 }
 
