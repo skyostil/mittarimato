@@ -4,7 +4,7 @@
 #include <freertos/task.h>
 
 template <typename Lambda>
-void Benchmark(Lambda&& lambda, int steps = 100) {
+void IRAM_ATTR Benchmark(Lambda&& lambda, int steps = 100) {
   auto start = xTaskGetTickCount();
   for (int i = 0; i < steps; i++)
     lambda();

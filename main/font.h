@@ -1,13 +1,15 @@
 
 #pragma once
 
+#include <esp_attr.h>
+
 struct Glyph {
  uint8_t width;
  uint8_t height;
  uint16_t offset;
 };
 
-constexpr uint32_t glyph_data[] = {
+constexpr uint32_t DRAM_ATTR glyph_data[] = {
   0b00000000000000000000000000000000,
   0b00000000000000000000000000000000,
   0b00000000000000000000000000000000,
@@ -1578,7 +1580,7 @@ constexpr uint32_t glyph_data[] = {
   0b00000000000000000000000000000000,
 };
 constexpr uint8_t first_glyph = 48;
-constexpr Glyph glyphs[] = {
+constexpr Glyph DRAM_ATTR glyphs[] = {
   {57, 79, 0},
   {38, 79, 158},
   {58, 79, 316},

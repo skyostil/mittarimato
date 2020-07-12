@@ -11,7 +11,7 @@
 
 // clang-format off
 // Based on https://lospec.com/palette-list/sweetie-16
-static constexpr std::array<uint16_t, 16> palette_ = {
+static constexpr DRAM_ATTR std::array<uint16_t, 16> palette_ = {
   PackRGB565(0x1a1c2c),
   PackRGB565(0x5d275d),
   PackRGB565(0xb13e53),
@@ -72,11 +72,11 @@ RainbowFX::RainbowFX() {
 }
 RainbowFX::~RainbowFX() = default;
 
-void RainbowFX::BeginRender() {
+void IRAM_ATTR RainbowFX::BeginRender() {
   backbuffer_ptr_ = &backbuffer_pixels_[0];
 }
 
-inline void ICACHE_RAM_ATTR RainbowFX::Render(uint32_t* pixels) {
+void IRAM_ATTR RainbowFX::Render(uint32_t* pixels) {
   if (kSuperSampling == 1) {
     for (size_t i = 0; i < Display::kRenderBatchPixels *
                                Display::kBitsPerPixel / (sizeof(uint32_t) * 8);
@@ -99,9 +99,10 @@ extern "C" void app_main() {
   auto distance_sensor = DistanceSensor::Create();
 
   auto rainbow_fx = std::unique_ptr<RainbowFX>(new RainbowFX());
-  Benchmark([&] {
+  Benchmark([&]() IRAM_ATTR {
     rainbow_fx->BeginRender();
-    display->Render([&](uint32_t* pixels) { rainbow_fx->Render(pixels); });
+    display->Render([&](uint32_t* pixels)
+                        IRAM_ATTR { rainbow_fx->Render(pixels); });
   });
   printf("heap free: %d\n", esp_get_free_heap_size());
 

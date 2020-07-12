@@ -48,6 +48,8 @@ for i in range(glyph_count):
 print(f'''
 #pragma once
 
+#include <esp_attr.h>
+
 struct Glyph {{
  uint8_t width;
  uint8_t height;
@@ -55,13 +57,13 @@ struct Glyph {{
 }};
 ''')
 
-print('constexpr uint32_t glyph_data[] = {')
+print('constexpr uint32_t DRAM_ATTR glyph_data[] = {')
 for g in glyph_data:
   print(f'  {g},')
 print('};')
 
 print(f'constexpr uint8_t first_glyph = {first_glyph};')
-print('constexpr Glyph glyphs[] = {')
+print('constexpr Glyph DRAM_ATTR glyphs[] = {')
 for g in glyphs:
   print(f'  {{{g[0]}, {g[1]}, {g[2]}}},')
 print('};')

@@ -1,15 +1,11 @@
 #pragma once
 
+#include <esp_attr.h>
 #include <driver/gpio.h>
 #include <string.h>
 #include <memory>
 
 #include "spi.h"
-
-#ifndef ICACHE_RAM_ATTR
-// TODO
-#define ICACHE_RAM_ATTR
-#endif
 
 // Driver for the SSD1331 RGB OLED panel. Based on Adafruit_SSD1331.
 class SSD1331 {
@@ -78,7 +74,7 @@ class SSD1331 {
   void Fill(uint8_t r, uint8_t g, uint8_t b);
 
   template <typename Renderer>
-  inline void ICACHE_RAM_ATTR Render(const Renderer& renderer) {
+  inline void IRAM_ATTR Render(const Renderer& renderer) {
     WriteCommand(CMD_SETCOLUMN);
     WriteCommand(0);
     WriteCommand(kWidth - 1);
@@ -111,7 +107,7 @@ class SSD1331 {
   }
 
  private:
-  void ICACHE_RAM_ATTR WriteCommand(uint16_t cmd) {
+  void IRAM_ATTR WriteCommand(uint16_t cmd) {
     gpio_set_level(kPinDC, 0);
     gpio_set_level(kPinCS, 0);
     spi_trans_t trans;
@@ -121,7 +117,7 @@ class SSD1331 {
     spi_trans(HSPI_HOST, &trans);
   }
 
-  void ICACHE_RAM_ATTR WriteData(const uint32_t* data, size_t bytes) {
+  void IRAM_ATTR WriteData(const uint32_t* data, size_t bytes) {
     gpio_set_level(kPinDC, 1);
     gpio_set_level(kPinCS, 0);
     spi_trans_t trans;
