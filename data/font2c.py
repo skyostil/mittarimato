@@ -12,6 +12,7 @@ img = Image.open(png_name)
 glyph_data = []
 glyphs = []
 first_glyph = None
+last_glyph = None
 
 for i in range(glyph_count):
   char, x, y, w, h, _, _, advance = f.readline().strip().split(' ')
@@ -22,6 +23,7 @@ for i in range(glyph_count):
 
   if first_glyph is None:
     first_glyph = char
+  last_glyph = char
 
   glyphs.append((w, h, len(glyph_data)))
 
@@ -56,13 +58,14 @@ struct Glyph {{
 }};
 ''')
 
-print('constexpr uint32_t DRAM_ATTR glyph_data[] = {')
+print('constexpr uint32_t DRAM_ATTR kGlyphData[] = {')
 for g1, g2 in zip(glyph_data[::2], glyph_data[1::2]):
   print(f'  {g1}, {g2},')
 print('};')
 
-print(f'constexpr uint8_t first_glyph = {first_glyph};')
-print('constexpr Glyph DRAM_ATTR glyphs[] = {')
+print(f'constexpr uint8_t kFirstGlyph = {first_glyph};')
+print(f'constexpr uint8_t kLastGlyph = {last_glyph};')
+print('constexpr Glyph DRAM_ATTR kGlyphs[] = {')
 for g in glyphs:
   print(f'  {{{g[0]}, {g[1]}, {g[2]}}},')
 print('};')

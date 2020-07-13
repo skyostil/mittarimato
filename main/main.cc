@@ -34,7 +34,7 @@ static constexpr DRAM_ATTR std::array<uint16_t, 16> palette_ = {
 class RainbowFX {
  public:
   static constexpr auto kBackbufferBitsPerPixel = 4;
-  static constexpr int kSuperSampling = 1;
+  static constexpr int kSuperSampling = 2;
   static constexpr int kSuperSamplingBitsPerPixel = 16;
   static constexpr auto kWidth = Display::kWidth * kSuperSampling;
   static constexpr auto kHeight = Display::kHeight * kSuperSampling;
@@ -45,7 +45,8 @@ class RainbowFX {
   void BeginRender();
   void Render(uint32_t* pixels);
 
-  void DrawGlyph(uint8_t glyph, uint8_t x, uint8_t y);
+  void Clear();
+  const Glyph* DrawGlyph(uint8_t glyph, int x, int y);
 
  private:
   // The backbuffer is 4 bits per pixel (paletted).
@@ -53,6 +54,7 @@ class RainbowFX {
       backbuffer_pixels_ __attribute__((aligned)) = {};
 
   const uint8_t* backbuffer_ptr_ = nullptr;
+  uint8_t render_column_ = 0;
 };
 
 RainbowFX::RainbowFX() {
@@ -72,13 +74,22 @@ RainbowFX::RainbowFX() {
     }
   }
 
-  DrawGlyph('9', 4, 4);
+  Clear();
 }
 RainbowFX::~RainbowFX() = default;
 
-void IRAM_ATTR RainbowFX::DrawGlyph(uint8_t glyph, uint8_t pos_x, uint8_t pos_y) {
-  const auto& g = glyphs[glyph - first_glyph];
-  const uint32_t* glyph_bits = &glyph_data[g.offset];
+void RainbowFX::Clear() {
+  for (auto& pixel : backbuffer_pixels_)
+    pixel = 0;
+}
+
+const Glyph* IRAM_ATTR RainbowFX::DrawGlyph(uint8_t glyph,
+                                            int pos_x,
+                                            int pos_y) {
+  if (glyph < kFirstGlyph || glyph > kLastGlyph)
+    return nullptr;
+  const auto& g = kGlyphs[glyph - kFirstGlyph];
+  const uint32_t* glyph_bits = &kGlyphData[g.offset];
   for (size_t y = 0; y < g.height; y++) {
     uint8_t* dest = &backbuffer_pixels_[((pos_y + y) * kWidth + pos_x) / 2];
     for (size_t x = 0; x < g.width; x += 32) {
@@ -92,13 +103,15 @@ void IRAM_ATTR RainbowFX::DrawGlyph(uint8_t glyph, uint8_t pos_x, uint8_t pos_y)
       glyph_bits++;
     }
   }
+  return &g;
 }
 
-void IRAM_ATTR RainbowFX::BeginRender() {
+void inline IRAM_ATTR RainbowFX::BeginRender() {
   backbuffer_ptr_ = &backbuffer_pixels_[0];
+  render_column_ = 0;
 }
 
-void IRAM_ATTR RainbowFX::Render(uint32_t* pixels) {
+void inline IRAM_ATTR RainbowFX::Render(uint32_t* pixels) {
   if (kSuperSampling == 1) {
     for (size_t i = 0; i < Display::kRenderBatchPixels *
                                Display::kBitsPerPixel / (sizeof(uint32_t) * 8);
@@ -110,6 +123,37 @@ void IRAM_ATTR RainbowFX::Render(uint32_t* pixels) {
       *pixels++ = p0 | (p1 << 16) | 0xf000f000;
     }
   } else if (kSuperSampling == 2) {
+    for (size_t i = 0; i < Display::kRenderBatchPixels *
+                               Display::kBitsPerPixel / (sizeof(uint32_t) * 8);
+         i++) {
+      uint8_t pair;
+      // Each backbuffer byte expands into two 16 bit pixels. Combine 4
+      // backbuffer pixels into one output pixel.
+      pair = *backbuffer_ptr_;
+      uint16_t p0 = palette_[pair & 0b00001111];
+      uint16_t p1 = palette_[(pair & 0b11110000) >> 4];
+
+      pair = *(backbuffer_ptr_++ + kWidth / 2);
+      uint16_t p2 = palette_[pair & 0b00001111];
+      uint16_t p3 = palette_[(pair & 0b11110000) >> 4];
+
+      pair = *backbuffer_ptr_;
+      uint16_t p4 = palette_[pair & 0b00001111];
+      uint16_t p5 = palette_[(pair & 0b11110000) >> 4];
+
+      pair = *(backbuffer_ptr_++ + kWidth / 2);
+      uint16_t p6 = palette_[pair & 0b00001111];
+      uint16_t p7 = palette_[(pair & 0b11110000) >> 4];
+      // TODO: Blend.
+      *pixels++ = p0 | (p1 << 16) | p2 | (p3 << 16) | p4 | (p5 << 16) | p6 |
+                  (p7 << 16);
+    }
+
+    render_column_ += Display::kRenderBatchPixels;
+    if (render_column_ >= Display::kWidth) {
+      backbuffer_ptr_ += kWidth * kBackbufferBitsPerPixel / 8;
+      render_column_ = 0;
+    }
   }
 }
 
@@ -132,8 +176,26 @@ extern "C" void app_main() {
 
   while (true) {
     uint32_t distance_mm;
-    if (distance_sensor->GetDistanceMM(distance_mm))
-      printf("%.2f cm\n", distance_mm / 10.f);
+    if (distance_sensor->GetDistanceMM(distance_mm)) {
+      // printf("%.2f cm\n", distance_mm / 10.f);
+      char buf[16];
+      itoa(distance_mm / 10, buf, 10);
+
+      rainbow_fx->Clear();
+      int x = 16;
+      int y = 16;
+      for (auto c : buf) {
+        if (!c)
+          break;
+        auto glyph = rainbow_fx->DrawGlyph(c, x, y);
+        if (!glyph)
+          break;
+        x += glyph->width;
+      }
+      rainbow_fx->BeginRender();
+      display->Render([&](uint32_t* pixels)
+                          IRAM_ATTR { rainbow_fx->Render(pixels); });
+    }
 
     vTaskDelay(100 / portTICK_PERIOD_MS);
   }
