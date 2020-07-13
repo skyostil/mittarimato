@@ -12,11 +12,27 @@ void IRAM_ATTR Benchmark(Lambda&& lambda, int steps = 100) {
   printf("%.2f ticks, %.2f ms\n", diff, (1000 / xPortGetTickRateHz()) * diff);
 }
 
+// This particular SSD1331 panel has quirky color ordering (red in the middle):
+// bbbbbbrrrrrrggggg
 constexpr uint16_t PackRGB565(uint8_t r, uint8_t g, uint8_t b) {
-  return ((r << 0) & 0b0000000000011111) | ((g << 5) & 0b0000011111100000) |
-         ((b << 11) & 0b1111100000000000);
+  return ((g >> 3) & 0b0000000000011111) | ((r << 2) & 0b0000011111100000) |
+         ((b << 7) & 0b1111100000000000);
 }
 
 constexpr uint16_t PackRGB565(uint32_t rgb) {
-  return PackRGB565(rgb & 0xff, (rgb & 0xff00) >> 8, (rgb & 0xff0000) >> 16);
+  return PackRGB565((rgb & 0xff0000) >> 16, (rgb & 0xff00) >> 8, rgb & 0xff);
+}
+
+// from 16 bits:          rrrrrggggggbbbbb
+//   to 25 bits: 000rrrrr000gggggg000bbbbb
+constexpr uint32_t ExplodeRGB565(uint16_t rgb) {
+  return (rgb & 0b11111) | ((rgb & 0b11111100000) << 3) |
+         ((rgb & 0b1111100000000000) << 6);
+}
+
+// from 25 bits: 000rrrrr000gggggg000bbbbb
+//   to 16 bits:          rrrrrggggggbbbbb
+constexpr uint16_t UnexplodeRGB565(uint32_t rgb) {
+  return (rgb & 0b11111) | ((rgb & 0b11111100000000) >> 3) |
+         ((rgb & 0b1111100000000000000000) >> 6);
 }

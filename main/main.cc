@@ -11,23 +11,23 @@
 
 // clang-format off
 // Based on https://lospec.com/palette-list/sweetie-16
-static constexpr DRAM_ATTR std::array<uint16_t, 16> palette_ = {
-  PackRGB565(0x1a1c2c * 0),
-  PackRGB565(0x5d275d),
-  PackRGB565(0xb13e53),
-  PackRGB565(0xef7d57),
-  PackRGB565(0xffcd75),
-  PackRGB565(0xa7f070),
-  PackRGB565(0x38b764),
-  PackRGB565(0x257179),
-  PackRGB565(0x29366f),
-  PackRGB565(0x3b5dc9),
-  PackRGB565(0x41a6f6),
-  PackRGB565(0x73eff7),
-  PackRGB565(0x333c57),
-  PackRGB565(0x566c86),
-  PackRGB565(0x94b0c2),
-  PackRGB565(0xf4f4f4),
+static constexpr DRAM_ATTR std::array<uint32_t, 16> palette_ = {
+  ExplodeRGB565(PackRGB565(0x1a1c2c * 0)),
+  ExplodeRGB565(PackRGB565(0x5d275d)),
+  ExplodeRGB565(PackRGB565(0xb13e53)),
+  ExplodeRGB565(PackRGB565(0xef7d57)),
+  ExplodeRGB565(PackRGB565(0xffcd75)),
+  ExplodeRGB565(PackRGB565(0xa7f070)),
+  ExplodeRGB565(PackRGB565(0x38b764)),
+  ExplodeRGB565(PackRGB565(0x257179)),
+  ExplodeRGB565(PackRGB565(0x29366f)),
+  ExplodeRGB565(PackRGB565(0x3b5dc9)),
+  ExplodeRGB565(PackRGB565(0x41a6f6)),
+  ExplodeRGB565(PackRGB565(0x73eff7)),
+  ExplodeRGB565(PackRGB565(0x333c57)),
+  ExplodeRGB565(PackRGB565(0x566c86)),
+  ExplodeRGB565(PackRGB565(0x94b0c2)),
+  ExplodeRGB565(PackRGB565(0xf4f4f4)),
 };
 // clang-format on
 
@@ -73,6 +73,9 @@ RainbowFX::RainbowFX() {
         backbuffer_pixels_[index] |= 0xff;
     }
   }
+  for (const auto c : palette_) {
+    printf("%06x\n", c);
+  }
 
   Clear();
 }
@@ -81,6 +84,13 @@ RainbowFX::~RainbowFX() = default;
 void RainbowFX::Clear() {
   for (auto& pixel : backbuffer_pixels_)
     pixel = 0;
+
+   int index = 0;
+   for (size_t y = 0; y < kHeight; y++) {
+     for (size_t x = 0; x < kWidth / 2; x++) {
+       backbuffer_pixels_[index++] = ((y / 8) & 0xf) | ((y / 8) << 4);
+     }
+   }
 }
 
 const Glyph* IRAM_ATTR RainbowFX::DrawGlyph(uint8_t glyph,
@@ -118,9 +128,11 @@ void inline IRAM_ATTR RainbowFX::Render(uint32_t* pixels) {
          i++) {
       // Each backbuffer byte expands into two 16 bit pixels.
       uint8_t pair = *backbuffer_ptr_++;
-      uint16_t p0 = palette_[pair & 0b00001111];
-      uint16_t p1 = palette_[(pair & 0b11110000) >> 4];
-      *pixels++ = p0 | (p1 << 16) | 0xf000f000;
+      uint16_t p0 = UnexplodeRGB565(palette_[pair & 0b00001111]);
+      uint16_t p1 = UnexplodeRGB565(palette_[(pair & 0b11110000) >> 4]);
+      *pixels++ = p0 | (p1 << 16);
+      // auto p = PackRGB565(0, 0, i * 4);
+      //*pixels++ = p | (p << 16);
     }
   } else if (kSuperSampling == 2) {
     for (size_t i = 0; i < Display::kRenderBatchPixels *
@@ -130,23 +142,24 @@ void inline IRAM_ATTR RainbowFX::Render(uint32_t* pixels) {
       // Each backbuffer byte expands into two 16 bit pixels. Combine 4
       // backbuffer pixels into one output pixel.
       pair = *backbuffer_ptr_;
-      uint16_t p0 = palette_[pair & 0b00001111];
-      uint16_t p1 = palette_[(pair & 0b11110000) >> 4];
+      uint32_t p0 = palette_[pair & 0b00001111];
+      uint32_t p1 = palette_[(pair & 0b11110000) >> 4];
 
       pair = *(backbuffer_ptr_++ + kWidth / 2);
-      uint16_t p2 = palette_[pair & 0b00001111];
-      uint16_t p3 = palette_[(pair & 0b11110000) >> 4];
+      uint32_t p2 = palette_[pair & 0b00001111];
+      uint32_t p3 = palette_[(pair & 0b11110000) >> 4];
 
       pair = *backbuffer_ptr_;
-      uint16_t p4 = palette_[pair & 0b00001111];
-      uint16_t p5 = palette_[(pair & 0b11110000) >> 4];
+      uint32_t p4 = palette_[pair & 0b00001111];
+      uint32_t p5 = palette_[(pair & 0b11110000) >> 4];
 
       pair = *(backbuffer_ptr_++ + kWidth / 2);
-      uint16_t p6 = palette_[pair & 0b00001111];
-      uint16_t p7 = palette_[(pair & 0b11110000) >> 4];
-      // TODO: Blend.
-      *pixels++ = p0 | (p1 << 16) | p2 | (p3 << 16) | p4 | (p5 << 16) | p6 |
-                  (p7 << 16);
+      uint32_t p6 = palette_[pair & 0b00001111];
+      uint32_t p7 = palette_[(pair & 0b11110000) >> 4];
+
+      uint16_t b0 = UnexplodeRGB565((p0 + p1 + p2 + p3) >> 2);
+      uint16_t b1 = UnexplodeRGB565((p4 + p5 + p6 + p7) >> 2);
+      *pixels++ = b0 | (b1 << 16);
     }
 
     render_column_ += Display::kRenderBatchPixels;

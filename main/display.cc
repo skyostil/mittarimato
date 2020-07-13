@@ -62,11 +62,11 @@ SSD1331::SSD1331() {
   WriteCommand(CMD_MASTERCURRENT);  // 0x87
   WriteCommand(0x06);
   WriteCommand(CMD_CONTRASTA);  // 0x81
-  WriteCommand(0x91 | 0xff);
+  WriteCommand(0x91);
   WriteCommand(CMD_CONTRASTB);  // 0x82
-  WriteCommand(0x50 | 0xff);
+  WriteCommand(0x50);
   WriteCommand(CMD_CONTRASTC);  // 0x83
-  WriteCommand(0x7D | 0xff);
+  WriteCommand(0x7D);
   WriteCommand(CMD_DISPLAYON);  // Turn on the panel.
 
   // Fill(31, 63, 31);
