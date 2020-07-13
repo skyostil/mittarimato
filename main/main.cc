@@ -45,10 +45,12 @@ class RainbowFX {
   void BeginRender();
   void Render(uint32_t* pixels);
 
+  void DrawGlyph(uint8_t glyph, uint8_t x, uint8_t y);
+
  private:
   // The backbuffer is 4 bits per pixel (paletted).
   std::array<uint8_t, kWidth * kHeight * kBackbufferBitsPerPixel / 8>
-      backbuffer_pixels_ __attribute__((aligned));
+      backbuffer_pixels_ __attribute__((aligned)) = {};
 
   const uint8_t* backbuffer_ptr_ = nullptr;
 };
@@ -60,7 +62,7 @@ RainbowFX::RainbowFX() {
       // uint16_t g = ((1 << 6) - 1) * (((x % 32) < 16) ? 1 : 0);
       // uint16_t b = ((1 << 5) - 1) * (((y % 16) < 8) ? 1 : 0);
       auto index = (y * kWidth + x) * kBackbufferBitsPerPixel / 8;
-      backbuffer_pixels_[index] = (x ^ y) >> 2;
+      // backbuffer_pixels_[index] |= (x ^ y) >> 2;
       if (x == 0)
         backbuffer_pixels_[index] |= 0x0f;
       if (x == kWidth - 1)
@@ -70,25 +72,27 @@ RainbowFX::RainbowFX() {
     }
   }
 
-  const auto& g = glyphs[0];
+  DrawGlyph('9', 4, 4);
+}
+RainbowFX::~RainbowFX() = default;
+
+void IRAM_ATTR RainbowFX::DrawGlyph(uint8_t glyph, uint8_t pos_x, uint8_t pos_y) {
+  const auto& g = glyphs[glyph - first_glyph];
   const uint32_t* glyph_bits = &glyph_data[g.offset];
   for (size_t y = 0; y < g.height; y++) {
-    uint8_t* dest = &backbuffer_pixels_[y * kWidth];
+    uint8_t* dest = &backbuffer_pixels_[((pos_y + y) * kWidth + pos_x) / 2];
     for (size_t x = 0; x < g.width; x += 32) {
       for (uint8_t px = 0; px < 32; px += 2) {
-        break;
-        *dest = 0;
-        if (*glyph_bits & (1u << px))
-          *dest |= 0xf0;
-        if (*glyph_bits & (1u << (px + 1)))
+        if (*glyph_bits & (1u << (31 - px)))
           *dest |= 0x0f;
+        if (*glyph_bits & (1u << (31 - px - 1)))
+          *dest |= 0xf0;
         dest++;
       }
       glyph_bits++;
     }
   }
 }
-RainbowFX::~RainbowFX() = default;
 
 void IRAM_ATTR RainbowFX::BeginRender() {
   backbuffer_ptr_ = &backbuffer_pixels_[0];
@@ -103,7 +107,7 @@ void IRAM_ATTR RainbowFX::Render(uint32_t* pixels) {
       uint8_t pair = *backbuffer_ptr_++;
       uint16_t p0 = palette_[pair & 0b00001111];
       uint16_t p1 = palette_[(pair & 0b11110000) >> 4];
-      *pixels++ = p0 | (p1 << 16);
+      *pixels++ = p0 | (p1 << 16) | 0xf000f000;
     }
   } else if (kSuperSampling == 2) {
   }

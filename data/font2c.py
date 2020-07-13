@@ -25,12 +25,11 @@ for i in range(glyph_count):
 
   glyphs.append((w, h, len(glyph_data)))
 
-  g = img.crop((x, y, w, h))
   for gy in range(h):
     bits = '0b'
     bit_count = 0
     for gx in range(w):
-      p = img.getpixel((gx, gy))
+      p = img.getpixel((x + gx, y + gy))
       if p[3] >= 128:
         bits += '1'
       else:
@@ -42,7 +41,7 @@ for i in range(glyph_count):
         bit_count = 0
     if bit_count:
       if bit_count < 32:
-        bits = '0b' + '0' * (32 - bit_count) + bits[2:]
+        bits += '0' * (32 - bit_count)
       glyph_data.append(bits)
 
 print(f'''
@@ -58,8 +57,8 @@ struct Glyph {{
 ''')
 
 print('constexpr uint32_t DRAM_ATTR glyph_data[] = {')
-for g in glyph_data:
-  print(f'  {g},')
+for g1, g2 in zip(glyph_data[::2], glyph_data[1::2]):
+  print(f'  {g1}, {g2},')
 print('};')
 
 print(f'constexpr uint8_t first_glyph = {first_glyph};')
