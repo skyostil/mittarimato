@@ -12,7 +12,7 @@
 // clang-format off
 // Based on https://lospec.com/palette-list/sweetie-16
 static constexpr DRAM_ATTR std::array<uint16_t, 16> palette_ = {
-  PackRGB565(0x1a1c2c),
+  PackRGB565(0x1a1c2c * 0),
   PackRGB565(0x5d275d),
   PackRGB565(0xb13e53),
   PackRGB565(0xef7d57),
@@ -59,16 +59,34 @@ RainbowFX::RainbowFX() {
       // uint16_t r = ((1 << 5) - 1) * (((x % 16) < 8) ? 1 : 0);
       // uint16_t g = ((1 << 6) - 1) * (((x % 32) < 16) ? 1 : 0);
       // uint16_t b = ((1 << 5) - 1) * (((y % 16) < 8) ? 1 : 0);
-      backbuffer_pixels_[(y * kWidth + x)] = x ^ y;
+      auto index = (y * kWidth + x) * kBackbufferBitsPerPixel / 8;
+      backbuffer_pixels_[index] = (x ^ y) >> 2;
+      if (x == 0)
+        backbuffer_pixels_[index] |= 0x0f;
+      if (x == kWidth - 1)
+        backbuffer_pixels_[index] |= 0xf0;
+      if (y == 0 || y == kHeight - 1)
+        backbuffer_pixels_[index] |= 0xff;
     }
   }
 
-  // const auto& g = glyphs[0];
-  // for (size_t y = 0; y < g.height; y++) {
-  //  uint32_t glyph_data;
-  //  for (size_t x = 0; x < g.width; x++) {
-  //  }
-  //}
+  const auto& g = glyphs[0];
+  const uint32_t* glyph_bits = &glyph_data[g.offset];
+  for (size_t y = 0; y < g.height; y++) {
+    uint8_t* dest = &backbuffer_pixels_[y * kWidth];
+    for (size_t x = 0; x < g.width; x += 32) {
+      for (uint8_t px = 0; px < 32; px += 2) {
+        break;
+        *dest = 0;
+        if (*glyph_bits & (1u << px))
+          *dest |= 0xf0;
+        if (*glyph_bits & (1u << (px + 1)))
+          *dest |= 0x0f;
+        dest++;
+      }
+      glyph_bits++;
+    }
+  }
 }
 RainbowFX::~RainbowFX() = default;
 
