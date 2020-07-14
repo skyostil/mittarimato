@@ -34,7 +34,7 @@ static constexpr DRAM_ATTR std::array<uint32_t, 16> palette_ = {
 class RainbowFX {
  public:
   static constexpr auto kBackbufferBitsPerPixel = 4;
-  static constexpr int kSuperSampling = 2;
+  static constexpr int kSuperSampling = 1;
   static constexpr int kSuperSamplingBitsPerPixel = 16;
   static constexpr auto kWidth = Display::kWidth * kSuperSampling;
   static constexpr auto kHeight = Display::kHeight * kSuperSampling;
@@ -55,6 +55,7 @@ class RainbowFX {
 
   const uint8_t* backbuffer_ptr_ = nullptr;
   uint8_t render_column_ = 0;
+  uint8_t render_row_ = 0;
 };
 
 RainbowFX::RainbowFX() {
@@ -119,6 +120,7 @@ const Glyph* IRAM_ATTR RainbowFX::DrawGlyph(uint8_t glyph,
 void inline IRAM_ATTR RainbowFX::BeginRender() {
   backbuffer_ptr_ = &backbuffer_pixels_[0];
   render_column_ = 0;
+  render_row_ = 0;
 }
 
 void inline IRAM_ATTR RainbowFX::Render(uint32_t* pixels) {
@@ -130,9 +132,30 @@ void inline IRAM_ATTR RainbowFX::Render(uint32_t* pixels) {
       uint8_t pair = *backbuffer_ptr_++;
       uint16_t p0 = UnexplodeRGB565(palette_[pair & 0b00001111]);
       uint16_t p1 = UnexplodeRGB565(palette_[(pair & 0b11110000) >> 4]);
-      *pixels++ = p0 | (p1 << 16);
-      // auto p = PackRGB565(0, 0, i * 4);
-      //*pixels++ = p | (p << 16);
+      //*pixels++ = p0 | (p1 << 16);
+      //auto p = PackRGB565(0, 0, i * 4);
+      // Render column goes from 0..96
+      uint16_t p = 0;
+      if (render_row_ < 16) {
+        auto c = std::min(render_column_, uint8_t{64}) >> 3;
+        p = 0b0000000000000111 & c;
+      } else if (render_row_ < 32) {
+        auto c = std::min(render_column_, uint8_t{64}) >> 3;
+        p = 0b0000000011100000 & (c << 5);
+      } else {
+        auto c = std::min(render_column_, uint8_t{64}) >> 4;
+        p = 0b0011100000000000 & (c << 11);
+      }
+      //auto p = ((render_column_ >> 3) & 0b11111) << 5;
+      //auto p = ((render_column_ >> 3) & 0b11111);
+      //auto p = PackRGB565(0, 0, render_column_ * 4);
+      *pixels++ = p | (p << 16);
+      render_column_ += 2;
+    }
+    //render_column_ += Display::kRenderBatchPixels;
+    if (render_column_ >= Display::kWidth) {
+      render_column_ = 0;
+      render_row_++;
     }
   } else if (kSuperSampling == 2) {
     for (size_t i = 0; i < Display::kRenderBatchPixels *
@@ -166,6 +189,7 @@ void inline IRAM_ATTR RainbowFX::Render(uint32_t* pixels) {
     if (render_column_ >= Display::kWidth) {
       backbuffer_ptr_ += kWidth * kBackbufferBitsPerPixel / 8;
       render_column_ = 0;
+      render_row_++;
     }
   }
 }
