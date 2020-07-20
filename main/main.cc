@@ -1,4 +1,5 @@
 #include <esp_system.h>
+#include <esp_task_wdt.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
@@ -46,6 +47,8 @@ class RainbowFX {
   void Render(uint32_t* pixels);
 
   void Clear();
+  void Fade();
+  void Move(bool up);
   const Glyph* DrawGlyph(uint8_t glyph, int x, int y);
 
  private:
@@ -66,13 +69,26 @@ RainbowFX::~RainbowFX() = default;
 void RainbowFX::Clear() {
   for (auto& pixel : backbuffer_pixels_)
     pixel = 0;
+  // int index = 0;
+  // for (size_t y = 0; y < kHeight; y++) {
+  //  for (size_t x = 0; x < kWidth / 2; x++) {
+  //    backbuffer_pixels_[index++] = ((y / 8) & 0xf) | ((y / 8) << 4);
+  //  }
+  //}
+}
 
-   int index = 0;
-   for (size_t y = 0; y < kHeight; y++) {
-     for (size_t x = 0; x < kWidth / 2; x++) {
-       backbuffer_pixels_[index++] = ((y / 8) & 0xf) | ((y / 8) << 4);
-     }
-   }
+void RainbowFX::Fade() {
+  for (uint8_t& pair : backbuffer_pixels_) {
+    uint8_t p0 = pair & 0b00001111;
+    uint8_t p1 = pair & 0b11110000;
+    p0 = p0 ? p0 - 0b00000001 : p0;
+    p1 = p1 ? p1 - 0b00010000 : p1;
+    pair = p0 | p1;
+  }
+}
+
+void RainbowFX::Move(bool up) {
+  // TODO
 }
 
 const Glyph* IRAM_ATTR RainbowFX::DrawGlyph(uint8_t glyph,
@@ -171,31 +187,45 @@ extern "C" void app_main() {
   printf("heap free: %d\n", esp_get_free_heap_size());
 
   distance_sensor->Start(100);
+  uint32_t frame = 0;
+  uint32_t distance_mm = 0;
+  uint32_t display_mm = 0;
 
   while (true) {
-    uint32_t distance_mm;
     if (distance_sensor->GetDistanceMM(distance_mm)) {
       // printf("%.2f cm\n", distance_mm / 10.f);
-      char buf[16];
-      itoa(distance_mm / 10, buf, 10);
-
-      rainbow_fx->Clear();
-      int x = 16;
-      int y = 16;
-      for (auto c : buf) {
-        if (!c)
-          break;
-        auto glyph = rainbow_fx->DrawGlyph(c, x, y);
-        if (!glyph)
-          break;
-        x += glyph->width;
-      }
-      rainbow_fx->BeginRender();
-      display->Render([&](uint32_t* pixels)
-                          IRAM_ATTR { rainbow_fx->Render(pixels); });
+      WDT_FEED();
     }
 
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+    int16_t delta = distance_mm - display_mm;
+    if (delta) {
+      display_mm += delta / 2;
+    } else {
+      display_mm = distance_mm;
+    }
+    char buf[16];
+    itoa(display_mm / 10, buf, 10);
+
+    // rainbow_fx->Clear();
+    int x = 16;
+    int y = 16;
+    for (auto c : buf) {
+      if (!c)
+        break;
+      auto glyph = rainbow_fx->DrawGlyph(c, x, y);
+      if (!glyph)
+        break;
+      x += glyph->width;
+    }
+
+    // if (frame % 16 == 0)
+    rainbow_fx->BeginRender();
+    display->Render([&](uint32_t* pixels)
+                        IRAM_ATTR { rainbow_fx->Render(pixels); });
+
+    rainbow_fx->Fade();
+    // vTaskDelay(1 / portTICK_PERIOD_MS);
+    frame++;
   }
 
   esp_restart();
