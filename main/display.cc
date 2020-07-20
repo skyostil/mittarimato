@@ -29,9 +29,9 @@ SSD1331::SSD1331() {
   WriteCommand(CMD_DISPLAYOFF);  // 0xAE
   WriteCommand(CMD_SETREMAP);    // 0xA0
   if (kColorOrder == COLOR_ORDER_RGB) {
-    WriteCommand(0x72);  // RGB Color
+    WriteCommand((0x72 & 0b111111) | 0b01000000);  // RGB Color
   } else {
-    WriteCommand(0x76);  // BGR Color
+    WriteCommand((0x76 & 0b111111) | 0b01000000);  // BGR Color
   }
   WriteCommand(CMD_STARTLINE);  // 0xA1
   WriteCommand(0x0);

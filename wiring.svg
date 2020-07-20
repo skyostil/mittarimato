@@ -21,9 +21,9 @@
 <polyline fill="none" stroke="black" points="0,-211.5 148,-211.5 "/>
 <text text-anchor="middle" x="74" y="-196.3" font-family="arial" font-size="14.00">VCC (3v3)</text>
 <polyline fill="none" stroke="black" points="0,-188.5 148,-188.5 "/>
-<text text-anchor="middle" x="74" y="-173.3" font-family="arial" font-size="14.00">SDA (D1 / GPIO 4)</text>
+<text text-anchor="middle" x="74" y="-173.3" font-family="arial" font-size="14.00">SDA (D2 / GPIO 4)</text>
 <polyline fill="none" stroke="black" points="0,-165.5 148,-165.5 "/>
-<text text-anchor="middle" x="74" y="-150.3" font-family="arial" font-size="14.00">SCL (D2 / GPIO 5)</text>
+<text text-anchor="middle" x="74" y="-150.3" font-family="arial" font-size="14.00">SCL (D1 / GPIO 5)</text>
 <polyline fill="none" stroke="black" points="0,-142.5 148,-142.5 "/>
 <text text-anchor="middle" x="74" y="-127.3" font-family="arial" font-size="14.00">SCLK (D5 / GPIO 14)</text>
 <polyline fill="none" stroke="black" points="0,-119.5 148,-119.5 "/>

@@ -5,8 +5,8 @@ connectors:
     pinout: [
       GND,
       VCC (3v3),
-      SDA (D1 / GPIO 4),
-      SCL (D2 / GPIO 5),
+      SDA (D2 / GPIO 4),
+      SCL (D1 / GPIO 5),
       SCLK (D5 / GPIO 14),
       MOSI (D7 / GPIO 13),
       RST (D6 / GPIO 12),
