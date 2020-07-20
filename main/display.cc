@@ -29,9 +29,9 @@ SSD1331::SSD1331() {
   WriteCommand(CMD_DISPLAYOFF);  // 0xAE
   WriteCommand(CMD_SETREMAP);    // 0xA0
   if (kColorOrder == COLOR_ORDER_RGB) {
-    WriteCommand((0x72 & 0b111111) | 0b01000000);  // RGB Color
+    WriteCommand(0x72);  // RGB Color
   } else {
-    WriteCommand((0x76 & 0b111111) | 0b01000000);  // BGR Color
+    WriteCommand(0x76);  // BGR Color
   }
   WriteCommand(CMD_STARTLINE);  // 0xA1
   WriteCommand(0x0);
@@ -53,7 +53,7 @@ SSD1331::SSD1331() {
   WriteCommand(0x64);
   WriteCommand(CMD_PRECHARGEB);  // 0x8B
   WriteCommand(0x78);
-  WriteCommand(CMD_PRECHARGEA);  // 0x8C
+  WriteCommand(CMD_PRECHARGEC);  // 0x8C
   WriteCommand(0x64);
   WriteCommand(CMD_PRECHARGELEVEL);  // 0xBB
   WriteCommand(0x3A);

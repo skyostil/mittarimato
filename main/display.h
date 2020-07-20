@@ -129,7 +129,7 @@ class SSD1331 {
 
   std::array<uint16_t,
              (kRenderInBatches ? kRenderBatchPixels : (kWidth * kHeight)) *
-                 kBitsPerPixel / 16>
+                 kBitsPerPixel / (sizeof(uint16_t) * 8)>
       pixels_ __attribute__((aligned));
 };
 
