@@ -48,8 +48,9 @@ class RainbowFX {
 
   void Clear();
   void Fade();
-  void Move(bool up);
+  void Move(int16_t delta);
   const Glyph* DrawGlyph(uint8_t glyph, int x, int y);
+  void MeasureText(const char*, uint16_t& w, uint16_t& h);
 
  private:
   // The backbuffer is 4 bits per pixel (paletted).
@@ -66,7 +67,7 @@ RainbowFX::RainbowFX() {
 
 RainbowFX::~RainbowFX() = default;
 
-void RainbowFX::Clear() {
+void IRAM_ATTR RainbowFX::Clear() {
   for (auto& pixel : backbuffer_pixels_)
     pixel = 0;
   // int index = 0;
@@ -77,7 +78,7 @@ void RainbowFX::Clear() {
   //}
 }
 
-void RainbowFX::Fade() {
+void IRAM_ATTR RainbowFX::Fade() {
   for (uint8_t& pair : backbuffer_pixels_) {
     uint8_t p0 = pair & 0b00001111;
     uint8_t p1 = pair & 0b11110000;
@@ -87,8 +88,21 @@ void RainbowFX::Fade() {
   }
 }
 
-void RainbowFX::Move(bool up) {
-  // TODO
+void IRAM_ATTR RainbowFX::Move(int16_t delta) {
+  if (delta > 0) {
+    if (delta >= kHeight)
+      delta = kHeight - 1;
+    const uint8_t* src = &backbuffer_pixels_[delta * kWidth / 2];
+    uint8_t* dst = &backbuffer_pixels_[0];
+    std::copy(src, src + kWidth * (kHeight - delta) / 2, dst);
+  } else {
+    delta = -delta;
+    if (delta >= kHeight)
+      delta = kHeight - 1;
+    const uint8_t* src = &backbuffer_pixels_[0];
+    uint8_t* dst = &backbuffer_pixels_[delta * kWidth / 2];
+    std::copy(src, src + kWidth * (kHeight - delta) / 2, dst);
+  }
 }
 
 const Glyph* IRAM_ATTR RainbowFX::DrawGlyph(uint8_t glyph,
@@ -112,6 +126,19 @@ const Glyph* IRAM_ATTR RainbowFX::DrawGlyph(uint8_t glyph,
     }
   }
   return &g;
+}
+
+void inline IRAM_ATTR RainbowFX::MeasureText(const char* text,
+                                             uint16_t& w,
+                                             uint16_t& h) {
+  w = 0;
+  h = 0;
+  while (*text) {
+    const auto& g = kGlyphs[*text - kFirstGlyph];
+    w += g.width;
+    h = std::max(h, static_cast<uint16_t>(g.height));
+    text++;
+  }
 }
 
 void inline IRAM_ATTR RainbowFX::BeginRender() {
@@ -200,15 +227,18 @@ extern "C" void app_main() {
     int16_t delta = distance_mm - display_mm;
     if (delta) {
       display_mm += delta / 2;
+      rainbow_fx->Move(delta / 4);
     } else {
       display_mm = distance_mm;
     }
     char buf[16];
     itoa(display_mm / 10, buf, 10);
 
+    uint16_t w, h;
+    rainbow_fx->MeasureText(buf, w, h);
     // rainbow_fx->Clear();
-    int x = 16;
-    int y = 16;
+    int x = RainbowFX::kWidth / 2 - w / 2;
+    int y = RainbowFX::kHeight / 2 - h / 2;
     for (auto c : buf) {
       if (!c)
         break;
