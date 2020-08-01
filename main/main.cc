@@ -61,6 +61,10 @@ class RainbowFX {
     static constexpr bool kBlend = true;
     static constexpr bool kScale2x = kSuperSampling == 2;
   };
+  struct BlendDrawTraits1X {
+    static constexpr bool kBlend = true;
+    static constexpr bool kScale2x = false;
+  };
   template <typename DrawTraits = DefaultDrawTraits>
   void DrawSprite(const Sprite& sprite, int x, int y);
 
@@ -151,7 +155,7 @@ void RainbowFX::DrawSprite(const Sprite& sprite, int pos_x, int pos_y) {
     pos_y = 0;
   }
   if (DrawTraits::kScale2x) {
-    if (pos_y * height > kHeight / 2) {
+    if (pos_y + height > kHeight / 2) {
       height = kHeight / 2 - pos_y;
     }
   } else {
@@ -270,11 +274,13 @@ extern "C" void app_main() {
   auto distance_sensor = DistanceSensor::Create();
 
   auto rainbow_fx = std::unique_ptr<RainbowFX>(new RainbowFX());
+#if 0
   Benchmark([&]() IRAM_ATTR {
     rainbow_fx->BeginRender();
     display->Render([&](uint32_t* pixels)
                         IRAM_ATTR { rainbow_fx->Render(pixels); });
   });
+#endif
   printf("heap free: %d\n", esp_get_free_heap_size());
 
   distance_sensor->Start(100);
@@ -299,8 +305,34 @@ extern "C" void app_main() {
     itoa(display_mm / 10, buf, 10);
 
     rainbow_fx->Clear();
-    rainbow_fx->DrawSprite(kSprites[0], 0, 50);
-    rainbow_fx->DrawSprite<RainbowFX::BlendDrawTraits>(kSprites[1], 0, 0);
+    uint32_t bg_offset = display_mm / 8;
+    const auto& bg_sprite = kSprites[4];
+    rainbow_fx->DrawSprite(bg_sprite, 0, bg_offset % (RainbowFX::kHeight / 2));
+    rainbow_fx->DrawSprite(
+        bg_sprite, RainbowFX::kWidth / 2 - bg_sprite.width,
+        bg_offset % (RainbowFX::kHeight / 2) - RainbowFX::kHeight / 2);
+
+    const int kMaxHeightMM = 4000;
+    int sprite = 0;
+    for (int h = 0; h < kMaxHeightMM; h += 150) {
+      int y = (static_cast<int>(display_mm) - h) / 2;
+      int x = 24 + h / 16 % 64;
+      if (y < -RainbowFX::kHeight)
+        break;
+      if (sprite % 7 == 0) {
+        rainbow_fx->DrawSprite<RainbowFX::BlendDrawTraits1X>(
+            kSprites[sprite % 5], x * 2, y);
+      } else {
+        rainbow_fx->DrawSprite<RainbowFX::BlendDrawTraits>(kSprites[sprite % 4],
+                                                           x, y);
+      }
+      sprite++;
+    }
+    // rainbow_fx->DrawSprite(kSprites[4], 0, (kSprites[4].height + display_mm)
+    // % (RainbowFX::kHeight / 2)); rainbow_fx->DrawSprite(kSprites[4], 0, 0);
+
+    // rainbow_fx->DrawSprite(kSprites[0], 0, 50);
+    // rainbow_fx->DrawSprite<RainbowFX::BlendDrawTraits>(kSprites[1], 0, 0);
 
     uint16_t w, h;
     rainbow_fx->MeasureText(buf, w, h);
