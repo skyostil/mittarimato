@@ -30,11 +30,10 @@ palette = [
 ]
 
 for fn in files:
-  print(fn)
   img = Image.open(fn)
   if img.size[0] % 2:
     img = img.crop((-1, 0, img.size[0] + 2, img.size[1]))
-  sprites.append((img.size[0], img.size[1], len(sprite_data)))
+  sprites.append((img.size[0], img.size[1], len(sprite_data) // 2))
 
   for y in range(img.size[1]):
     for x in range(img.size[0]):

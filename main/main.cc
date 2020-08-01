@@ -8,6 +8,7 @@
 #include "font.h"
 #include "i2c.h"
 #include "spi.h"
+#include "sprites.h"
 #include "util.h"
 
 // clang-format off
@@ -51,6 +52,17 @@ class RainbowFX {
   void Move(int16_t delta);
   const Glyph* DrawGlyph(uint8_t glyph, int x, int y);
   void MeasureText(const char*, uint16_t& w, uint16_t& h);
+
+  struct DefaultDrawTraits {
+    static constexpr bool kBlend = false;
+    static constexpr bool kScale2x = kSuperSampling == 2;
+  };
+  struct BlendDrawTraits {
+    static constexpr bool kBlend = true;
+    static constexpr bool kScale2x = kSuperSampling == 2;
+  };
+  template <typename DrawTraits = DefaultDrawTraits>
+  void DrawSprite(const Sprite& sprite, int x, int y);
 
  private:
   // The backbuffer is 4 bits per pixel (paletted).
@@ -126,6 +138,40 @@ const Glyph* IRAM_ATTR RainbowFX::DrawGlyph(uint8_t glyph,
     }
   }
   return &g;
+}
+
+template <typename DrawTraits>
+void RainbowFX::DrawSprite(const Sprite& sprite, int pos_x, int pos_y) {
+  const uint8_t* sprite_bits = &kSpriteData[sprite.offset];
+  for (size_t y = 0; y < sprite.height; y++) {
+    uint8_t* dest = &backbuffer_pixels_[((pos_y + y) * kWidth + pos_x) / 2];
+    if (DrawTraits::kScale2x) {
+      dest = &backbuffer_pixels_[(2 * (pos_y + y) * kWidth + pos_x) / 2];
+    }
+    for (size_t x = 0; x < sprite.width; x += 2) {
+      if (DrawTraits::kBlend) {
+        uint8_t p0 = *sprite_bits & 0x0f;
+        uint8_t p1 = *sprite_bits & 0xf0;
+        if (p0) {
+          *dest &= 0xf0;
+          *dest |= p0;
+        }
+        if (p1) {
+          *dest &= 0x0f;
+          *dest |= p1;
+        }
+      } else {
+        *dest = *sprite_bits;
+      }
+      if (DrawTraits::kScale2x) {
+        dest[1] = dest[kWidth / 2] = dest[(kWidth / 2) + 1] = *dest;
+        dest += 2;
+      } else {
+        dest++;
+      }
+      sprite_bits++;
+    }
+  }
 }
 
 void inline IRAM_ATTR RainbowFX::MeasureText(const char* text,
@@ -234,6 +280,10 @@ extern "C" void app_main() {
     char buf[16];
     itoa(display_mm / 10, buf, 10);
 
+    rainbow_fx->Clear();
+    rainbow_fx->DrawSprite(kSprites[0], 0, 0);
+    rainbow_fx->DrawSprite<RainbowFX::BlendDrawTraits>(kSprites[1], 0, 0);
+
     uint16_t w, h;
     rainbow_fx->MeasureText(buf, w, h);
     // rainbow_fx->Clear();
@@ -253,7 +303,7 @@ extern "C" void app_main() {
     display->Render([&](uint32_t* pixels)
                         IRAM_ATTR { rainbow_fx->Render(pixels); });
 
-    rainbow_fx->Fade();
+    // rainbow_fx->Fade();
     // vTaskDelay(1 / portTICK_PERIOD_MS);
     frame++;
   }

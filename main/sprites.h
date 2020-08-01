@@ -1,8 +1,3 @@
-sprites/sprite1.PNG
-sprites/sprite2.PNG
-sprites/sprite3.PNG
-sprites/sprite4.PNG
-sprites/sprite5.PNG
 
 #pragma once
 
@@ -652,8 +647,8 @@ constexpr uint8_t DRAM_ATTR kSpriteData[] = {
 };
 constexpr Sprite DRAM_ATTR kSprites[] = {
   {62, 26, 0},
-  {30, 27, 1612},
-  {60, 23, 2422},
-  {70, 39, 3802},
-  {84, 43, 6532},
+  {30, 27, 806},
+  {60, 23, 1211},
+  {70, 39, 1901},
+  {84, 43, 3266},
 };
