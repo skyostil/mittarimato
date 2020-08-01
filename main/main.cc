@@ -145,7 +145,9 @@ const Glyph* IRAM_ATTR RainbowFX::DrawGlyph(uint8_t glyph,
 }
 
 template <typename DrawTraits>
-void RainbowFX::DrawSprite(const Sprite& sprite, int pos_x, int pos_y) {
+void IRAM_ATTR RainbowFX::DrawSprite(const Sprite& sprite,
+                                     int pos_x,
+                                     int pos_y) {
   const uint8_t* sprite_bits = &kSpriteData[sprite.offset];
   int width = sprite.width;
   int height = sprite.height;
@@ -266,7 +268,7 @@ void inline IRAM_ATTR RainbowFX::Render(uint32_t* pixels) {
   }
 }
 
-extern "C" void app_main() {
+extern "C" void IRAM_ATTR app_main() {
   SetupI2C();
   SetupSPI();
 
@@ -287,6 +289,8 @@ extern "C" void app_main() {
   uint32_t frame = 0;
   uint32_t distance_mm = 0;
   uint32_t display_mm = 0;
+  int stable_count = 0;
+  bool sleeping = false;
 
   while (true) {
     if (distance_sensor->GetDistanceMM(distance_mm)) {
@@ -296,13 +300,22 @@ extern "C" void app_main() {
 
     int16_t delta = distance_mm - display_mm;
     if (delta) {
-      display_mm += delta / 2;
-      rainbow_fx->Move(delta / 4);
+      display_mm += delta / 4;
+      // rainbow_fx->Move(delta / 4);
     } else {
       display_mm = distance_mm;
     }
-    char buf[16];
-    itoa(display_mm / 10, buf, 10);
+    if (abs(delta) <= 7) {
+      stable_count++;
+    } else {
+      stable_count = 0;
+      sleeping = false;
+      display->Enable(true);
+    }
+    if (stable_count > 60 * 5) {
+      sleeping = true;
+      display->Enable(false);
+    }
 
     rainbow_fx->Clear();
     uint32_t bg_offset = display_mm / 8;
@@ -328,11 +341,9 @@ extern "C" void app_main() {
       }
       sprite++;
     }
-    // rainbow_fx->DrawSprite(kSprites[4], 0, (kSprites[4].height + display_mm)
-    // % (RainbowFX::kHeight / 2)); rainbow_fx->DrawSprite(kSprites[4], 0, 0);
 
-    // rainbow_fx->DrawSprite(kSprites[0], 0, 50);
-    // rainbow_fx->DrawSprite<RainbowFX::BlendDrawTraits>(kSprites[1], 0, 0);
+    char buf[16];
+    itoa(display_mm / 10, buf, 10);
 
     uint16_t w, h;
     rainbow_fx->MeasureText(buf, w, h);
@@ -354,7 +365,8 @@ extern "C" void app_main() {
                         IRAM_ATTR { rainbow_fx->Render(pixels); });
 
     // rainbow_fx->Fade();
-    // vTaskDelay(1 / portTICK_PERIOD_MS);
+    if (sleeping)
+      vTaskDelay(500 / portTICK_PERIOD_MS);
     frame++;
   }
 

@@ -117,3 +117,15 @@ void SSD1331::Fill(uint8_t r, uint8_t g, uint8_t b) {
   WriteCommand(g);
   WriteCommand(b);
 }
+
+void SSD1331::Enable(bool enabled) {
+  if (enabled) {
+    WriteCommand(CMD_POWERMODE);
+    WriteCommand(0x0B);
+    WriteCommand(CMD_DISPLAYON);
+  } else {
+    WriteCommand(CMD_DISPLAYOFF);
+    WriteCommand(CMD_POWERMODE);
+    WriteCommand(0x1A);
+  }
+}

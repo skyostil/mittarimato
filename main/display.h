@@ -72,6 +72,7 @@ class SSD1331 {
 
   void Clear();
   void Fill(uint8_t r, uint8_t g, uint8_t b);
+  void Enable(bool);
 
   template <typename Renderer>
   inline void IRAM_ATTR Render(const Renderer& renderer) {
