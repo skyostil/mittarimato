@@ -143,12 +143,30 @@ const Glyph* IRAM_ATTR RainbowFX::DrawGlyph(uint8_t glyph,
 template <typename DrawTraits>
 void RainbowFX::DrawSprite(const Sprite& sprite, int pos_x, int pos_y) {
   const uint8_t* sprite_bits = &kSpriteData[sprite.offset];
-  for (size_t y = 0; y < sprite.height; y++) {
+  int width = sprite.width;
+  int height = sprite.height;
+  if (pos_y < 0) {
+    sprite_bits += -pos_y * (sprite.width / 2);
+    height -= -pos_y;
+    pos_y = 0;
+  }
+  if (DrawTraits::kScale2x) {
+    if (pos_y * height > kHeight / 2) {
+      height = kHeight / 2 - pos_y;
+    }
+  } else {
+    if (pos_y + height > kHeight) {
+      height = kHeight - pos_y;
+    }
+  }
+  if (height < 0)
+    return;
+  for (size_t y = 0; y < height; y++) {
     uint8_t* dest = &backbuffer_pixels_[((pos_y + y) * kWidth + pos_x) / 2];
     if (DrawTraits::kScale2x) {
       dest = &backbuffer_pixels_[(2 * (pos_y + y) * kWidth + pos_x) / 2];
     }
-    for (size_t x = 0; x < sprite.width; x += 2) {
+    for (size_t x = 0; x < width; x += 2) {
       if (DrawTraits::kBlend) {
         uint8_t p0 = *sprite_bits & 0x0f;
         uint8_t p1 = *sprite_bits & 0xf0;
@@ -281,7 +299,7 @@ extern "C" void app_main() {
     itoa(display_mm / 10, buf, 10);
 
     rainbow_fx->Clear();
-    rainbow_fx->DrawSprite(kSprites[0], 0, 0);
+    rainbow_fx->DrawSprite(kSprites[0], 0, 50);
     rainbow_fx->DrawSprite<RainbowFX::BlendDrawTraits>(kSprites[1], 0, 0);
 
     uint16_t w, h;
