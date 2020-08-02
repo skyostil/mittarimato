@@ -336,7 +336,7 @@ extern "C" void IRAM_ATTR app_main() {
     int sprite = 0;
     for (int h = 0; h < kMaxHeightMM; h += 150) {
       int y = (static_cast<int>(display_mm) - h) / 2;
-      int x = 24 + h / 16 % 64;
+      int x = 32 + h / 16 % 64;
       if (y < -RainbowFX::kHeight)
         break;
       if (sprite % 7 == 0) {
