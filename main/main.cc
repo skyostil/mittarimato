@@ -275,6 +275,50 @@ void inline IRAM_ATTR RainbowFX::Render(uint32_t* pixels) {
   }
 }
 
+void IRAM_ATTR Render(RainbowFX& rainbow_fx, uint32_t display_mm) {
+  rainbow_fx.Clear();
+  uint32_t bg_offset = display_mm / 8;
+  const auto& bg_sprite = kSprites[4];
+  rainbow_fx.DrawSprite(bg_sprite, 0, bg_offset % (RainbowFX::kHeight / 2));
+  rainbow_fx.DrawSprite(
+      bg_sprite, RainbowFX::kWidth / 2 - bg_sprite.width,
+      bg_offset % (RainbowFX::kHeight / 2) - RainbowFX::kHeight / 2);
+
+  const int kMaxHeightMM = 4000;
+  int sprite = 0;
+  for (int h = 0; h < kMaxHeightMM; h += 150) {
+    int y = (static_cast<int>(display_mm) - h) / 2;
+    int x = 32 + h / 16 % 64;
+    if (y < -RainbowFX::kHeight)
+      break;
+    if (sprite % 7 == 0) {
+      rainbow_fx.DrawSprite<RainbowFX::BlendDrawTraits1X>(kSprites[sprite % 5],
+                                                          x * 2, y);
+    } else {
+      rainbow_fx.DrawSprite<RainbowFX::BlendDrawTraits>(kSprites[sprite % 4], x,
+                                                        y);
+    }
+    sprite++;
+  }
+
+  char buf[16];
+  itoa(display_mm / 10, buf, 10);
+
+  uint16_t w, h;
+  rainbow_fx.MeasureText(buf, w, h);
+  // rainbow_fx->Clear();
+  int x = RainbowFX::kWidth / 2 - w / 2;
+  int y = RainbowFX::kHeight / 2 - h / 2;
+  for (auto c : buf) {
+    if (!c)
+      break;
+    auto glyph = rainbow_fx.DrawGlyph(c, x, y);
+    if (!glyph)
+      break;
+    x += glyph->width;
+  }
+}
+
 extern "C" void IRAM_ATTR app_main() {
   SetupI2C();
   SetupSPI();
@@ -298,6 +342,8 @@ extern "C" void IRAM_ATTR app_main() {
   uint32_t display_mm = 0;
   int stable_count = 0;
   bool sleeping = false;
+  constexpr int kSleepThresholdFrames = 60 * 5;
+  constexpr int kFadeFrames = 60;
 
   while (true) {
     if (distance_sensor->GetDistanceMM(distance_mm)) {
@@ -319,61 +365,23 @@ extern "C" void IRAM_ATTR app_main() {
       sleeping = false;
       display->Enable(true);
     }
-    if (stable_count > 60 * 5) {
+    if (stable_count > kSleepThresholdFrames) {
       sleeping = true;
       display->Enable(false);
+    } else if (stable_count > kSleepThresholdFrames - kFadeFrames) {
+      if (stable_count % 3 == 0)
+        rainbow_fx->Fade();
+    } else {
+      Render(*rainbow_fx, display_mm);
     }
 
-    rainbow_fx->Clear();
-    uint32_t bg_offset = display_mm / 8;
-    const auto& bg_sprite = kSprites[4];
-    rainbow_fx->DrawSprite(bg_sprite, 0, bg_offset % (RainbowFX::kHeight / 2));
-    rainbow_fx->DrawSprite(
-        bg_sprite, RainbowFX::kWidth / 2 - bg_sprite.width,
-        bg_offset % (RainbowFX::kHeight / 2) - RainbowFX::kHeight / 2);
-
-    const int kMaxHeightMM = 4000;
-    int sprite = 0;
-    for (int h = 0; h < kMaxHeightMM; h += 150) {
-      int y = (static_cast<int>(display_mm) - h) / 2;
-      int x = 32 + h / 16 % 64;
-      if (y < -RainbowFX::kHeight)
-        break;
-      if (sprite % 7 == 0) {
-        rainbow_fx->DrawSprite<RainbowFX::BlendDrawTraits1X>(
-            kSprites[sprite % 5], x * 2, y);
-      } else {
-        rainbow_fx->DrawSprite<RainbowFX::BlendDrawTraits>(kSprites[sprite % 4],
-                                                           x, y);
-      }
-      sprite++;
-    }
-
-    char buf[16];
-    itoa(display_mm / 10, buf, 10);
-
-    uint16_t w, h;
-    rainbow_fx->MeasureText(buf, w, h);
-    // rainbow_fx->Clear();
-    int x = RainbowFX::kWidth / 2 - w / 2;
-    int y = RainbowFX::kHeight / 2 - h / 2;
-    for (auto c : buf) {
-      if (!c)
-        break;
-      auto glyph = rainbow_fx->DrawGlyph(c, x, y);
-      if (!glyph)
-        break;
-      x += glyph->width;
-    }
-
-    // if (frame % 16 == 0)
-    rainbow_fx->BeginRender();
-    display->Render([&](uint32_t* pixels)
-                        IRAM_ATTR { rainbow_fx->Render(pixels); });
-
-    // rainbow_fx->Fade();
-    if (sleeping)
+    if (sleeping) {
       vTaskDelay(500 / portTICK_PERIOD_MS);
+    } else {
+      rainbow_fx->BeginRender();
+      display->Render([&](uint32_t* pixels)
+                          IRAM_ATTR { rainbow_fx->Render(pixels); });
+    }
     frame++;
   }
 
