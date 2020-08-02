@@ -52,6 +52,8 @@ class SSD1331 {
   };
 
   constexpr static ColorOrder kColorOrder = COLOR_ORDER_RGB;
+  constexpr static bool kFlipHorizontally = true;
+  constexpr static bool kFlipVertically = true;
 
  public:
   constexpr static uint8_t kWidth = 96;

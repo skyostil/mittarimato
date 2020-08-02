@@ -28,11 +28,14 @@ SSD1331::SSD1331() {
 
   WriteCommand(CMD_DISPLAYOFF);  // 0xAE
   WriteCommand(CMD_SETREMAP);    // 0xA0
-  if (kColorOrder == COLOR_ORDER_RGB) {
-    WriteCommand(0x72);  // RGB Color
-  } else {
-    WriteCommand(0x76);  // BGR Color
-  }
+  uint8_t remap = 0x72;
+  if (kColorOrder == COLOR_ORDER_RGB)
+    remap |= 0xb100;
+  if (kFlipHorizontally)
+    remap &= ~0b10;
+  if (kFlipVertically)
+    remap &= ~0b10000;
+  WriteCommand(remap);
   WriteCommand(CMD_STARTLINE);  // 0xA1
   WriteCommand(0x0);
   WriteCommand(CMD_DISPLAYOFFSET);  // 0xA2
