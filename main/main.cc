@@ -188,7 +188,14 @@ void IRAM_ATTR RainbowFX::DrawSprite(const Sprite& sprite,
         *dest = *sprite_bits;
       }
       if (DrawTraits::kScale2x) {
-        dest[1] = dest[kWidth / 2] = dest[(kWidth / 2) + 1] = *dest;
+        uint8_t p0 = *dest & 0x0f;
+        uint8_t p1 = *dest & 0xf0;
+        p0 |= p0 << 4;
+        p1 |= p1 >> 4;
+        dest[0] = p0;
+        dest[(kWidth / 2)] = p0;
+        dest[1] = p1;
+        dest[(kWidth / 2) + 1] = p1;
         dest += 2;
       } else {
         dest++;
@@ -305,7 +312,7 @@ extern "C" void IRAM_ATTR app_main() {
     } else {
       display_mm = distance_mm;
     }
-    if (abs(delta) <= 7) {
+    if (abs(delta) <= 10) {
       stable_count++;
     } else {
       stable_count = 0;
