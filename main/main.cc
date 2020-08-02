@@ -288,7 +288,7 @@ void IRAM_ATTR Render(RainbowFX& rainbow_fx, uint32_t display_mm) {
   int sprite = 0;
   for (int h = 0; h < kMaxHeightMM; h += 150) {
     int y = (static_cast<int>(display_mm) - h) / 2;
-    int x = 32 + h / 16 % 64;
+    int x = 24 + h / 16 % 64;
     if (y < -RainbowFX::kHeight)
       break;
     if (sprite % 7 == 0) {
@@ -340,6 +340,7 @@ extern "C" void IRAM_ATTR app_main() {
   uint32_t frame = 0;
   uint32_t distance_mm = 0;
   uint32_t display_mm = 0;
+  uint32_t stable_mm = 0;
   int stable_count = 0;
   bool sleeping = false;
   constexpr int kSleepThresholdFrames = 60 * 5;
@@ -358,10 +359,11 @@ extern "C" void IRAM_ATTR app_main() {
     } else {
       display_mm = distance_mm;
     }
-    if (abs(delta) <= 10) {
+    if (abs(distance_mm - stable_mm) < 7) {
       stable_count++;
     } else {
       stable_count = 0;
+      stable_mm = distance_mm;
       sleeping = false;
       display->Enable(true);
     }
@@ -376,7 +378,7 @@ extern "C" void IRAM_ATTR app_main() {
     }
 
     if (sleeping) {
-      vTaskDelay(500 / portTICK_PERIOD_MS);
+      vTaskDelay(250 / portTICK_PERIOD_MS);
     } else {
       rainbow_fx->BeginRender();
       display->Render([&](uint32_t* pixels)
