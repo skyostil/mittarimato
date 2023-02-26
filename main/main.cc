@@ -81,9 +81,11 @@ extern "C" void IRAM_ATTR app_main() {
   uint32_t stable_mm = 0;
   int stable_count = 0;
   int fail_count = 0;
+  int awake_count = 0;
   bool sleeping = false;
   constexpr int kSleepThresholdFrames = 60 * 5;
   constexpr int kFadeFrames = 60;
+  constexpr int kMaxWakeTimeFrames = 60 * 30;
 
   while (true) {
     if (distance_sensor->GetDistanceMM(distance_mm)) {
@@ -113,16 +115,19 @@ extern "C" void IRAM_ATTR app_main() {
       stable_mm = distance_mm;
       if (sleeping) {
         esp_set_cpu_freq(ESP_CPU_FREQ_160M);
+        sleeping = false;
+        display->Enable(true);
+        awake_count = 0;
       }
-      sleeping = false;
-      display->Enable(true);
     }
-    if (stable_count > kSleepThresholdFrames) {
+    if (!sleeping)
+      awake_count++;
+    if (stable_count > kSleepThresholdFrames || awake_count > kMaxWakeTimeFrames) {
       if (!sleeping) {
         esp_set_cpu_freq(ESP_CPU_FREQ_80M);
+        sleeping = true;
+        display->Enable(false);
       }
-      sleeping = true;
-      display->Enable(false);
     } else if (stable_count > kSleepThresholdFrames - kFadeFrames) {
       if (stable_count % 3 == 0)
         rainbow_fx->Fade();
