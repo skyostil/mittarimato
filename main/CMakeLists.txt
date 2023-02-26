@@ -5,4 +5,7 @@ idf_component_register(
     "i2c.cc"
     "main.cc"
     "spi.cc"
-  INCLUDE_DIRS "")
+    "rainbow_fx.cc"
+  INCLUDE_DIRS ""
+  REQUIRES pthread)
+component_compile_options("-faligned-new")

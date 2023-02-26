@@ -110,25 +110,8 @@ class SSD1331 {
   }
 
  private:
-  void IRAM_ATTR WriteCommand(uint16_t cmd) {
-    gpio_set_level(kPinDC, 0);
-    gpio_set_level(kPinCS, 0);
-    spi_trans_t trans;
-    memset(&trans, 0, sizeof(trans));
-    trans.cmd = &cmd;
-    trans.bits.cmd = 8;
-    spi_trans(HSPI_HOST, &trans);
-  }
-
-  void IRAM_ATTR WriteData(const uint32_t* data, size_t bytes) {
-    gpio_set_level(kPinDC, 1);
-    gpio_set_level(kPinCS, 0);
-    spi_trans_t trans;
-    memset(&trans, 0, sizeof(trans));
-    trans.mosi = const_cast<uint32_t*>(data);
-    trans.bits.mosi = bytes * 8;
-    spi_trans(HSPI_HOST, &trans);
-  }
+  void IRAM_ATTR WriteCommand(uint16_t cmd);
+  void IRAM_ATTR WriteData(const uint32_t* data, size_t bytes);
 
   std::array<uint16_t,
              (kRenderInBatches ? kRenderBatchPixels : (kWidth * kHeight)) *

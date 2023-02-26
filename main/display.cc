@@ -132,3 +132,23 @@ void SSD1331::Enable(bool enabled) {
     WriteCommand(0x1A);
   }
 }
+
+void IRAM_ATTR SSD1331::WriteCommand(uint16_t cmd) {
+  gpio_set_level(kPinDC, 0);
+  gpio_set_level(kPinCS, 0);
+  spi_trans_t trans;
+  memset(&trans, 0, sizeof(trans));
+  trans.cmd = &cmd;
+  trans.bits.cmd = 8;
+  spi_trans(HSPI_HOST, &trans);
+}
+
+void IRAM_ATTR SSD1331::WriteData(const uint32_t* data, size_t bytes) {
+  gpio_set_level(kPinDC, 1);
+  gpio_set_level(kPinCS, 0);
+  spi_trans_t trans;
+  memset(&trans, 0, sizeof(trans));
+  trans.mosi = const_cast<uint32_t*>(data);
+  trans.bits.mosi = bytes * 8;
+  spi_trans(HSPI_HOST, &trans);
+}
