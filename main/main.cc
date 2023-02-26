@@ -90,11 +90,12 @@ extern "C" void IRAM_ATTR app_main() {
   while (true) {
     if (distance_sensor->GetDistanceMM(distance_mm)) {
       // printf("%.2f cm\n", distance_mm / 10.f);
-      printf("%d mm\n", distance_mm);
+      //printf("%d mm\n", distance_mm);
       WDT_FEED();
       fail_count = 0;
     } else {
-      printf("%d failures\n", ++fail_count);
+      fail_count++;
+      // printf("%d failures\n", fail_count);
       if (fail_count > 32) {
         printf("Too many failures, rebooting...\n");
         esp_restart();
