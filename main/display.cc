@@ -72,7 +72,9 @@ SSD1331::SSD1331() {
   WriteCommand(0x7D);
   WriteCommand(CMD_DISPLAYON);  // Turn on the panel.
 
+  // Test pattern:
   // Fill(31, 63, 31);
+
   Clear();
 #if 0
   if (!kRenderInBatches) {

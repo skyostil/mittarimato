@@ -89,13 +89,10 @@ extern "C" void IRAM_ATTR app_main() {
 
   while (true) {
     if (distance_sensor->GetDistanceMM(distance_mm)) {
-      // printf("%.2f cm\n", distance_mm / 10.f);
-      //printf("%d mm\n", distance_mm);
       WDT_FEED();
       fail_count = 0;
     } else {
       fail_count++;
-      // printf("%d failures\n", fail_count);
       if (fail_count > 32) {
         printf("Too many failures, rebooting...\n");
         esp_restart();
@@ -105,7 +102,6 @@ extern "C" void IRAM_ATTR app_main() {
     int16_t delta = distance_mm - display_mm;
     if (delta) {
       display_mm += delta / 4;
-      // rainbow_fx->Move(delta / 4);
     } else {
       display_mm = distance_mm;
     }
