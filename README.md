@@ -7,7 +7,7 @@ and an RGB OLED screen. I'm using it to display the height of my standing desk.
 
 Demo video:
 
-<video src="assets/mittarimato.mp4" controls></video>
+https://github.com/user-attachments/assets/af4e9fe0-a843-4f42-8bcf-ffeb4df2d004
 
 ## Hardware
 
